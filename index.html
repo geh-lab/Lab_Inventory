@@ -5,70 +5,270 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lab Inventory</title>
     <style>
-        :root { --bg-color: #f4f6f8; --text-main: #333d4b; --text-sub: #8b95a1; --primary: #3182f6; --green: #27ae60; --danger: #e95353; --card-bg: #ffffff; }
-        body { background-color: var(--bg-color); color: var(--text-main); font-family: 'Pretendard', sans-serif; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        header { position: sticky; top: 0; z-index: 100; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(0,0,0,0.05); padding-top: max(env(safe-area-inset-top), 10px); }
-        .header-inner { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 20px; }
-        .type-switch { display: flex; background: #e9ecef; padding: 4px; border-radius: 10px; }
-        .switch-btn { flex: 1; border: none; background: transparent; padding: 10px 0; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--text-sub); cursor: pointer; transition: 0.2s; }
-        .switch-btn.active { background: #fff; color: var(--text-main); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .switch-btn[data-type="greenhouse"].active { color: var(--green); }
-        .switch-btn[data-type="lab"].active { color: var(--primary); }
-        .header-top { display: flex; width: 100%; gap: 10px; }
-        .search-box { flex: 1; background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 0 14px; height: 44px; display: flex; align-items: center; }
-        input#search { width: 100%; border: none; background: transparent; font-size: 15px; outline: none; }
-        button#addBtn { width: 44px; height: 44px; background: var(--text-main); border: none; border-radius: 10px; color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 800px; margin: 0 auto; padding: 20px 20px 100px 20px; }
-        .item { background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.03); cursor: pointer; transition: transform 0.2s; position: relative; }
-        .thumb-box { width: 100%; aspect-ratio: 4 / 3; background: #f8f9fa; position: relative; }
-        .thumb-img { width: 100%; height: 100%; object-fit: cover; }
-        .thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; color: #fff; }
-        .qty-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; backdrop-filter: blur(4px); }
-        .qty-badge.low { background: var(--danger); }
-        .info-box { padding: 12px; }
-        .title { font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .meta-info { font-size: 12px; color: var(--text-sub); display: flex; flex-direction: column; gap: 2px; }
-        .tag-row { margin-top: 8px; display: flex; gap: 4px; }
-        .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f2f5; color: #555; font-weight: 600; }
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
-        .modal-card { background: #fff; width: 90%; max-width: 400px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
-        .modal-body { display: flex; gap: 16px; margin-bottom: 20px; }
-        .modal-thumb { width: 90px; height: 90px; border-radius: 10px; background: #eee; object-fit: cover; border: 1px solid #ddd; }
-        .modal-placeholder { width: 90px; height: 90px; border-radius: 10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:30px; font-weight:bold; }
-        .modal-right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-        .inp-full-edit { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; background: #fafafa; box-sizing: border-box; }
-        .qty-control { display: flex; align-items: center; border: 1px solid #ddd; border-radius: 8px; width: fit-content; background: #fff; }
-        .qty-btn { width: 32px; height: 32px; border: none; background: transparent; font-size: 16px; cursor: pointer; color: #555; }
-        .qty-val { width: 40px; text-align: center; border: none; font-weight: bold; font-size: 16px; }
-        .btn-row { display: flex; gap: 8px; margin-top: 20px; }
-        .btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; }
-        .btn-save { background: var(--text-main); color: #fff; }
-        .btn-del { background: #fff5f5; color: var(--danger); }
-        .btn-cancel { background: #f5f5f5; color: #777; }
-        .btn-upload { background: #f2f4f6; color: #333; font-size: 12px; padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; width: 100%; margin-top: 5px; }
-        .inp-group { margin-bottom: 12px; }
-        .inp-label { display: block; font-size: 12px; font-weight: 700; color: #888; margin-bottom: 4px; }
-        .inp-field { width: 100%; height: 42px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; font-size: 15px; box-sizing: border-box; }
-        .chip-group { display: flex; gap: 8px; margin-bottom: 12px; }
+        :root {
+            --bg-dark: #0f172a;
+            --text-main: #f8fafc;
+            --text-sub: #cbd5e1;
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --glass-bg: rgba(30, 41, 59, 0.65);
+            --primary-color: #3b82f6;
+            --danger-color: #ef4444;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0; padding: 0;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- 1. 배경 이미지 설정 (요청하신 Unsplash 이미지) --- */
+        .bg-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            background-image: url('https://images.unsplash.com/photo-1635776062360-af423602aff3?q=80&w=3432&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+            background-size: cover;
+            background-position: center;
+        }
+        /* 글씨가 잘 보이도록 어두운 오버레이 추가 */
+        .bg-overlay {
+            position: absolute; inset: 0;
+            background: rgba(0, 0, 0, 0.6); /* 어두운 정도 조절 (0.6 = 60%) */
+            backdrop-filter: blur(2px); /* 배경을 살짝 흐리게 */
+        }
+        
+        /* --- 2. 헤더 디자인 (투명 유리) --- */
+        header {
+            position: sticky; top: 0; z-index: 100;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-bottom: 1px solid var(--glass-border);
+            padding-top: max(env(safe-area-inset-top), 20px);
+            padding-bottom: 20px;
+            background: rgba(15, 23, 42, 0.4);
+            box-shadow: 0 4px 30px rgba(0,0,0,0.1);
+        }
+
+        .header-inner {
+            max-width: 900px; margin: 0 auto; padding: 0 24px;
+            display: flex; flex-direction: column; gap: 20px;
+        }
+
+        /* 메인 타이틀 */
+        .app-title {
+            font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
+            color: #fff;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        /* 탭 스위치 (Dark Glass) */
+        .type-switch {
+            display: flex; background: rgba(0, 0, 0, 0.4);
+            padding: 4px; border-radius: 16px;
+            border: 1px solid var(--glass-border);
+        }
+        .switch-btn {
+            flex: 1; border: none; background: transparent; padding: 12px 0; border-radius: 12px;
+            font-size: 15px; font-weight: 600; color: #94a3b8; cursor: pointer; transition: 0.3s;
+        }
+        .switch-btn.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 검색 & 버튼 영역 */
+        .header-top { display: flex; gap: 12px; }
+        .search-box {
+            flex: 1; height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px; padding: 0 16px;
+            display: flex; align-items: center;
+            transition: 0.3s;
+        }
+        .search-box:focus-within {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255,255,255,0.4);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+        }
+        input#search {
+            width: 100%; background: transparent; border: none; outline: none;
+            color: #fff; font-size: 16px;
+        }
+        input#search::placeholder { color: rgba(255,255,255,0.5); }
+
+        button#addBtn {
+            width: 50px; height: 50px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+            border: 1px solid var(--glass-border);
+            border-radius: 16px; color: #fff; font-size: 24px;
+            cursor: pointer; backdrop-filter: blur(4px);
+            transition: 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        button#addBtn:hover { background: rgba(255,255,255,0.3); transform: scale(1.05); }
+
+        /* --- 3. 리스트 영역 (Grid) --- */
+        #list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 24px;
+            max-width: 900px; margin: 0 auto;
+            padding: 40px 24px 120px 24px;
+        }
+
+        /* --- 4. Liquid Glass Card (사진 강조형) --- */
+        .item {
+            position: relative;
+            background: var(--glass-bg);
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(20px) saturate(120%);
+            -webkit-backdrop-filter: blur(20px) saturate(120%);
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.6);
+            
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transform: perspective(1000px);
+            transition: transform 0.1s ease-out;
+            
+            display: flex; flex-direction: column;
+        }
+        
+        /* 사진 영역 (크게 확대) */
+        .card-img-area {
+            width: 100%;
+            height: 180px; /* 사진 높이 고정 */
+            position: relative;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .card-img-top {
+            width: 100%; height: 100%; object-fit: cover;
+            transition: transform 0.3s;
+        }
+        .item:hover .card-img-top { transform: scale(1.05); }
+
+        /* 사진 없을 때 플레이스홀더 */
+        .card-placeholder {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 48px; font-weight: 800; color: rgba(255,255,255,0.8);
+            text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        /* 텍스트 내용 영역 */
+        .item-content {
+            padding: 20px;
+            position: relative; z-index: 10;
+            flex: 1; display: flex; flex-direction: column;
+            pointer-events: none; /* 3D 틸트 효과 방해 방지 */
+        }
+
+        /* 광택 효과 */
+        .glare {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255,255,255,0.2) 0%, transparent 50%);
+            opacity: 0; z-index: 20; transition: opacity 0.3s; pointer-events: none; mix-blend-mode: overlay;
+        }
+        .item:hover .glare { opacity: 1; }
+
+        /* 타이틀 및 뱃지 */
+        .title-row {
+            margin-bottom: 8px;
+        }
+        .item-title {
+            font-size: 20px; font-weight: 700; color: #fff;
+            margin: 0 0 6px 0;
+            line-height: 1.3;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        /* 카테고리 뱃지 */
+        .cat-badge {
+            display: inline-block;
+            font-size: 12px; padding: 4px 10px; border-radius: 20px;
+            font-weight: 600; 
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        /* 테마별 색상 (온실: 초록, 실험실: 파랑) */
+        .theme-greenhouse .cat-badge { background: rgba(34, 197, 94, 0.2); color: #86efac; border-color: rgba(34, 197, 94, 0.4); }
+        .theme-lab .cat-badge { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border-color: rgba(59, 130, 246, 0.4); }
+        .theme-etc .cat-badge { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+
+        .item-desc {
+            font-size: 14px; color: var(--text-sub); line-height: 1.5;
+            margin-bottom: 16px; flex: 1;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .item-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 13px; color: rgba(255,255,255,0.7);
+        }
+        .qty-val-display { color: #fff; font-weight: 700; font-size: 14px; }
+
+        /* --- 모달 (Dark Theme) --- */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; backdrop-filter: blur(8px); justify-content: center; align-items: center; }
+        .modal-card {
+            background: #1e293b; width: 90%; max-width: 400px; padding: 24px; border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; max-height: 90vh; overflow-y: auto;
+        }
+        
+        .inp-full-edit { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 12px; color: #fff; font-size: 15px; margin-bottom: 8px; box-sizing: border-box;}
+        .inp-full-edit:focus { border-color: var(--primary-color); outline: none; background: rgba(0,0,0,0.5); }
+        
+        .qty-control { display: flex; align-items: center; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        .qty-btn { color: #fff; width: 40px; height: 40px; background: transparent; border: none; font-size: 18px; cursor: pointer; }
+        .qty-btn:hover { background: rgba(255,255,255,0.1); }
+        .qty-val { background: transparent; color: #fff; width: 40px; text-align: center; border: none; font-size: 16px; font-weight: bold; }
+
+        .btn-row { display: flex; gap: 10px; margin-top: 24px; }
+        .btn { flex: 1; padding: 14px; border-radius: 14px; font-weight: bold; border: none; cursor: pointer; font-size: 15px; transition: 0.2s; }
+        .btn-save { background: var(--primary-color); color: #fff; box-shadow: 0 4px 15px rgba(59,130,246,0.3); }
+        .btn-del { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .btn-cancel { background: rgba(255,255,255,0.1); color: #cbd5e1; }
+
+        .inp-group { margin-bottom: 16px; }
+        .inp-label { color: #94a3b8; font-size: 13px; margin-bottom: 8px; display: block; font-weight: 600; }
+        .inp-field { width: 100%; height: 46px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0 14px; border-radius: 12px; box-sizing: border-box; font-size: 15px; }
+        
+        .chip-group { display: flex; gap: 8px; }
+        .chip-label { padding: 8px 16px; background: rgba(255,255,255,0.05); border-radius: 20px; color: #aaa; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 13px; transition: 0.2s; }
+        .chip-radio:checked + .chip-label { background: #fff; color: #0f172a; font-weight: bold; box-shadow: 0 0 15px rgba(255,255,255,0.3); border-color: #fff; }
         .chip-radio { display: none; }
-        .chip-label { padding: 6px 12px; border-radius: 20px; border: 1px solid #ddd; font-size: 13px; color: #666; cursor: pointer; background: #fff; }
-        .chip-radio:checked + .chip-label { background: var(--text-main); color: #fff; border-color: var(--text-main); font-weight: 600; }
+        
         input[type="file"] { display: none; }
+        .btn-upload { background: rgba(255,255,255,0.1); color: #fff; width: 100%; padding: 12px; border-radius: 12px; border: 1px dashed rgba(255,255,255,0.3); cursor: pointer; transition: 0.2s; }
+        .btn-upload:hover { background: rgba(255,255,255,0.15); border-color: #fff; }
     </style>
 </head>
 <body>
 
+<div class="bg-container">
+    <div class="bg-overlay"></div>
+</div>
+
 <header>
     <div class="header-inner">
+        <div class="app-title">Lab Inventory</div>
+        
         <div class="type-switch">
-            <button class="switch-btn active" data-type="greenhouse" onclick="setCategory('greenhouse')">온실</button>
-            <button class="switch-btn" data-type="lab" onclick="setCategory('lab')">실험실</button>
-            <button class="switch-btn" data-type="etc" onclick="setCategory('etc')">기타</button>
+            <button class="switch-btn active" data-type="greenhouse" onclick="setCategory('greenhouse')">온실 (Greenhouse)</button>
+            <button class="switch-btn" data-type="lab" onclick="setCategory('lab')">실험실 (Lab)</button>
+            <button class="switch-btn" data-type="etc" onclick="setCategory('etc')">기타 (Etc)</button>
         </div>
+        
         <div class="header-top">
             <div class="search-box">
-                <input type="text" id="search" placeholder="물품 검색..." onkeyup="render()">
+                <input type="text" id="search" placeholder="물품 검색 (Search)..." onkeyup="render()">
             </div>
             <button id="addBtn" onclick="openAddModal()">＋</button>
         </div>
@@ -79,32 +279,49 @@
 
 <div id="editModal" class="modal-overlay" onclick="closeModal('editModal')">
     <div class="modal-card" onclick="event.stopPropagation()">
-        <div style="font-size:18px; font-weight:800; margin-bottom:20px;">상세 정보</div>
-        <div class="modal-body">
-            <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
-                <img id="mThumb" class="modal-thumb" src="" onerror="this.style.display='none'">
-                <div id="mPlaceholder" class="modal-placeholder" style="display:none"></div>
-                <button class="btn-upload" onclick="document.getElementById('mFileInput').click()">사진 변경</button>
-                <input type="file" id="mFileInput" accept="image/*" onchange="handleFileSelect(this, 'mThumb', 'mPlaceholder')">
+        <div style="font-size:20px; font-weight:800; margin-bottom:20px; text-align:center;">물품 수정</div>
+        
+        <div style="margin-bottom:20px; text-align:center;">
+            <div style="position:relative; width:100%; height:150px; background:#0f172a; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); margin-bottom:8px;">
+                <img id="mThumb" style="width:100%; height:100%; object-fit:cover; display:none;">
+                <div id="mPlaceholder" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.3); font-size:14px;">사진 없음</div>
             </div>
-            <div class="modal-right">
+            <button class="btn-upload" onclick="document.getElementById('mFileInput').click()" style="padding:8px; font-size:13px;">사진 변경</button>
+            <input type="file" id="mFileInput" accept="image/*" onchange="handleFileSelect(this, 'mThumb', 'mPlaceholder')">
+        </div>
+        
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="inp-group">
+                <label class="inp-label">이름</label>
                 <input type="text" id="mNameInput" class="inp-full-edit" style="font-weight:bold;">
-                <input type="text" id="mUsageInput" class="inp-full-edit" placeholder="용도/설명">
-                <input type="text" id="mLocInput" class="inp-full-edit" placeholder="세부 위치">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
-                    <span style="font-size:13px; font-weight:600; color:#555;">수량</span>
+            </div>
+            
+            <div style="display:flex; gap:12px;">
+                <div class="inp-group" style="flex:1;">
+                    <label class="inp-label">수량</label>
                     <div class="qty-control">
                         <button class="qty-btn" onclick="changeQty(-1)">-</button>
                         <input type="number" id="mQty" class="qty-val" value="0" readonly>
                         <button class="qty-btn" onclick="changeQty(1)">+</button>
                     </div>
                 </div>
+                <div class="inp-group" style="flex:1;">
+                    <label class="inp-label">위치</label>
+                    <input type="text" id="mLocInput" class="inp-full-edit">
+                </div>
+            </div>
+
+            <div class="inp-group">
+                <label class="inp-label">설명</label>
+                <input type="text" id="mUsageInput" class="inp-full-edit">
+            </div>
+
+            <div class="chip-group" style="justify-content:center; margin-top:10px;">
+                <label><input type="radio" name="mCat" value="장비" class="chip-radio"><span class="chip-label">장비</span></label>
+                <label><input type="radio" name="mCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
             </div>
         </div>
-        <div class="chip-group" style="justify-content: center;">
-            <label><input type="radio" name="mCat" value="장비" class="chip-radio"><span class="chip-label">장비</span></label>
-            <label><input type="radio" name="mCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
-        </div>
+
         <div class="btn-row">
             <button class="btn btn-del" onclick="deleteItem()">삭제</button>
             <button class="btn btn-cancel" onclick="closeModal('editModal')">취소</button>
@@ -115,21 +332,24 @@
 
 <div id="addModal" class="modal-overlay" onclick="closeModal('addModal')">
     <div class="modal-card" onclick="event.stopPropagation()">
-        <div style="font-size:18px; font-weight:800; text-align:center; margin-bottom:20px;">새 물품 등록</div>
+        <div style="font-size:20px; font-weight:800; text-align:center; margin-bottom:20px;">새 물품 등록</div>
+        
         <div class="inp-group">
             <label class="inp-label">물품 이름</label>
-            <input type="text" id="newName" class="inp-field">
+            <input type="text" id="newName" class="inp-field" placeholder="예: PH Meter">
         </div>
-        <div style="display:flex; gap:10px;">
+
+        <div style="display:flex; gap:12px;">
             <div class="inp-group" style="flex:1;">
                 <label class="inp-label">수량</label>
                 <input type="number" id="newQty" class="inp-field" value="1">
             </div>
             <div class="inp-group" style="flex:1;">
                 <label class="inp-label">세부 위치</label>
-                <input type="text" id="newLoc" class="inp-field">
+                <input type="text" id="newLoc" class="inp-field" placeholder="예: A-1 선반">
             </div>
         </div>
+
         <div class="inp-group">
             <label class="inp-label">분류</label>
             <div class="chip-group">
@@ -137,19 +357,22 @@
                 <label><input type="radio" name="newCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
             </div>
         </div>
+
         <div class="inp-group">
             <label class="inp-label">용도 / 설명</label>
-            <input type="text" id="newUsage" class="inp-field">
+            <input type="text" id="newUsage" class="inp-field" placeholder="간단한 설명 입력">
         </div>
+
         <div class="inp-group">
-            <label class="inp-label">사진 (자동 압축됨)</label>
-            <button class="btn-upload" onclick="document.getElementById('newFileInput').click()" style="height:42px; margin-top:0;">사진 선택</button>
+            <label class="inp-label">사진 등록</label>
+            <button class="btn-upload" onclick="document.getElementById('newFileInput').click()">사진 선택 (자동 압축)</button>
             <input type="file" id="newFileInput" accept="image/*" onchange="handleFileSelect(this, 'previewNew', 'previewLabel')">
-            <div style="margin-top:8px; text-align:center;">
-                <img id="previewNew" style="width:100px; height:100px; object-fit:cover; border-radius:8px; display:none;">
-                <span id="previewLabel" style="font-size:12px; color:#aaa;">선택된 사진 없음</span>
+            <div style="margin-top:10px; text-align:center;">
+                <img id="previewNew" style="width:100%; height:150px; border-radius:12px; object-fit:cover; display:none; border:1px solid rgba(255,255,255,0.2);">
+                <span id="previewLabel" style="font-size:12px; color:#aaa; display:block; margin-top:4px;">선택된 사진 없음</span>
             </div>
         </div>
+
         <div class="btn-row">
             <button class="btn btn-cancel" onclick="closeModal('addModal')">취소</button>
             <button class="btn btn-save" onclick="createItem()">등록</button>
@@ -159,7 +382,7 @@
 
 <script type="module">
     // -----------------------------------------------------------
-    // ▼ 사용자 Firebase 설정 (완료됨) ▼
+    // ▼ Firebase 설정 ▼
     // -----------------------------------------------------------
     const firebaseConfig = {
         apiKey: "AIzaSyCzMpS-PnOPEnCL6Fqk8VteNzHMrpXMmS8",
@@ -171,7 +394,6 @@
         appId: "1:218879100576:web:74e6b66f3400cc5c286bc5"
     };
 
-    // 브라우저용 CDN에서 Firebase 모듈 불러오기
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
@@ -179,19 +401,18 @@
     const db = getDatabase(app);
 
     let currentCategory = 'greenhouse';
-    let localDB = {}; // 서버 데이터를 실시간으로 담아둘 변수
+    let localDB = {}; 
     let selectedId = null;
-    let tempImgData = null; // 이미지 임시 저장
+    let tempImgData = null; 
 
-    // 1. 실시간 데이터 리스너 (DB가 바뀌면 이 함수가 자동으로 실행됨)
+    // DB 리스너
     const dbRef = ref(db, 'inventory');
     onValue(dbRef, (snapshot) => {
         const data = snapshot.val();
         localDB = data || { greenhouse: {}, lab: {}, etc: {} };
-        render(); // 화면 갱신
+        render(); 
     });
 
-    // 2. 카테고리 변경
     window.setCategory = (type) => {
         currentCategory = type;
         document.querySelectorAll('.switch-btn').forEach(btn => 
@@ -199,7 +420,6 @@
         render();
     };
 
-    // 3. 화면 그리기
     window.render = () => {
         const listEl = document.getElementById('list');
         listEl.innerHTML = '';
@@ -214,32 +434,52 @@
             return item.name.toLowerCase().includes(query) || (item.usage && item.usage.toLowerCase().includes(query));
         });
 
-        // 정렬
         filtered.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
         if (filtered.length === 0) {
-            listEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#8b95a1; margin-top:60px;">데이터가 없습니다.</div>';
+            listEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#cbd5e1; margin-top:60px;">데이터가 없습니다.</div>';
             return;
         }
 
+        // 테마 설정
+        let themeClass = 'theme-etc';
+        if(currentCategory === 'greenhouse') themeClass = 'theme-greenhouse';
+        else if(currentCategory === 'lab') themeClass = 'theme-lab';
+
         filtered.forEach(item => {
             const div = document.createElement('div');
-            div.className = 'item';
+            div.className = `item ${themeClass}`; 
             
-            let imgHtml = item.img ? 
-                `<img class="thumb-img" src="${item.img}">` : 
-                `<div class="thumb-placeholder" style="background:${getColor(item.name)}">${item.name.charAt(0)}</div>`;
+            // 3D Tilt 효과 바인딩
+            div.onmousemove = handleTilt;
+            div.onmouseleave = resetTilt;
+
+            // 이미지가 있으면 이미지 표시, 없으면 이름 첫 글자로 예쁜 배경 생성
+            let imageContent = '';
+            if (item.img) {
+                imageContent = `<img class="card-img-top" src="${item.img}">`;
+            } else {
+                imageContent = `<div class="card-placeholder" style="background:${getColor(item.name)}">${item.name.charAt(0)}</div>`;
+            }
 
             div.innerHTML = `
-                <div class="thumb-box">
-                    ${imgHtml}
-                    <div class="qty-badge ${item.qty <= 3 ? 'low' : ''}">${item.qty}</div>
+                <div class="glare"></div>
+                
+                <div class="card-img-area">
+                    ${imageContent}
                 </div>
-                <div class="info-box">
-                    <div class="title">${item.name}</div>
-                    <div class="meta-info">
-                        <span>${item.loc || '위치 미지정'}</span>
-                        <div class="tag-row"><span class="tag">${item.cat}</span></div>
+
+                <div class="item-content">
+                    <div class="title-row">
+                        <div class="item-title">${item.name}</div>
+                        <span class="cat-badge">${item.cat}</span>
+                    </div>
+
+                    <p class="item-desc">${item.usage || '설명 없음'}</p>
+                    
+                    <div class="item-footer">
+                        <span>📍 ${item.loc || '위치 미지정'}</span>
+                        <span class="qty-val-display">${item.qty}개</span>
                     </div>
                 </div>
             `;
@@ -248,53 +488,70 @@
         });
     };
 
-    // 4. 아이템 추가 (서버 전송)
+    // --- 3D Tilt 효과 로직 ---
+    function handleTilt(e) {
+        const card = e.currentTarget;
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        // 회전 강도
+        const rotateX = ((y - centerY) / centerY) * -5;
+        const rotateY = ((x - centerX) / centerX) * 5;
+        
+        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+        
+        // 광택 이동
+        const glare = card.querySelector('.glare');
+        if(glare) {
+            glare.style.setProperty('--x', `${x}px`);
+            glare.style.setProperty('--y', `${y}px`);
+        }
+    }
+    function resetTilt(e) {
+        e.currentTarget.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)`;
+    }
+
+    // --- CRUD 및 유틸 ---
     window.createItem = () => {
         const name = document.getElementById('newName').value.trim();
-        if (!name) return alert('이름을 입력하세요');
-
-        const newId = Date.now().toString(); // 시간으로 ID 생성
+        if (!name) return alert('이름을 입력해주세요.');
+        const newId = Date.now().toString(); 
         const newItem = {
             name: name,
             qty: parseInt(document.getElementById('newQty').value) || 0,
             loc: document.getElementById('newLoc').value,
             usage: document.getElementById('newUsage').value,
             cat: document.querySelector('input[name="newCat"]:checked').value,
-            img: tempImgData // 압축된 이미지 데이터
+            img: tempImgData 
         };
-
         set(ref(db, `inventory/${currentCategory}/${newId}`), newItem)
             .then(() => closeModal('addModal'))
-            .catch((err) => alert("저장 실패: " + err));
+            .catch((err) => alert("오류 발생: " + err));
     };
 
-    // 5. 아이템 수정 저장
     window.saveItem = () => {
         if (!selectedId) return;
         const itemRef = ref(db, `inventory/${currentCategory}/${selectedId}`);
-        
         const updatedItem = {
             name: document.getElementById('mNameInput').value,
             qty: parseInt(document.getElementById('mQty').value),
             loc: document.getElementById('mLocInput').value,
             usage: document.getElementById('mUsageInput').value,
             cat: document.querySelector('input[name="mCat"]:checked').value,
-            img: tempImgData // 기존 이미지 or 새 이미지
+            img: tempImgData 
         };
-
         set(itemRef, updatedItem).then(() => closeModal('editModal'));
     };
 
-    // 6. 삭제
     window.deleteItem = () => {
         if (!confirm("정말 삭제하시겠습니까?")) return;
         remove(ref(db, `inventory/${currentCategory}/${selectedId}`))
             .then(() => closeModal('editModal'));
     };
 
-    // --- 유틸리티 및 모달 관련 ---
-    
-    // 이미지 파일 선택 및 압축 (DB 용량 절약)
     window.handleFileSelect = (input, imgId, phId) => {
         if (input.files && input.files[0]) {
             const file = input.files[0];
@@ -303,21 +560,24 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_SIZE = 500; // 500px로 제한
+                    const MAX_SIZE = 600; // 사진 크기 약간 상향
                     let w = img.width, h = img.height;
                     if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } 
                     else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
-                    
                     canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    tempImgData = canvas.toDataURL('image/jpeg', 0.8);
                     
-                    // 화질 0.7로 압축해서 문자열로 변환
-                    tempImgData = canvas.toDataURL('image/jpeg', 0.7);
+                    const imgEl = document.getElementById(imgId);
+                    imgEl.src = tempImgData;
+                    imgEl.style.display = 'block';
                     
-                    // 미리보기
-                    document.getElementById(imgId).src = tempImgData;
-                    document.getElementById(imgId).style.display = 'block';
-                    if(document.getElementById(phId)) document.getElementById(phId).style.display = 'none';
+                    const phEl = document.getElementById(phId);
+                    if(phEl) phEl.style.display = 'none';
+                    
+                    // 미리보기 라벨 숨기기
+                    const labelEl = document.getElementById('previewLabel');
+                    if(labelEl) labelEl.style.display = 'none';
                 };
                 img.src = e.target.result;
             };
@@ -332,25 +592,23 @@
         document.getElementById('newUsage').value = '';
         tempImgData = null;
         document.getElementById('previewNew').style.display = 'none';
-        document.getElementById('previewLabel').style.display = 'block';
+        const labelEl = document.getElementById('previewLabel');
+        if(labelEl) { labelEl.style.display = 'block'; labelEl.innerText = '선택된 사진 없음'; }
         document.getElementById('addModal').style.display = 'flex';
     };
 
     window.openEditModal = (item) => {
         selectedId = item.id;
         tempImgData = item.img || null;
-        
         document.getElementById('mNameInput').value = item.name;
         document.getElementById('mLocInput').value = item.loc || '';
         document.getElementById('mUsageInput').value = item.usage || '';
         document.getElementById('mQty').value = item.qty;
-        
         const radios = document.getElementsByName('mCat');
         radios.forEach(r => r.checked = (r.value === item.cat));
-
+        
         const imgEl = document.getElementById('mThumb');
         const phEl = document.getElementById('mPlaceholder');
-        
         if (item.img) {
             imgEl.src = item.img;
             imgEl.style.display = 'block';
@@ -358,8 +616,6 @@
         } else {
             imgEl.style.display = 'none';
             phEl.style.display = 'flex';
-            phEl.innerText = item.name.charAt(0);
-            phEl.style.backgroundColor = getColor(item.name);
         }
         document.getElementById('editModal').style.display = 'flex';
     };
@@ -371,7 +627,15 @@
     };
 
     function getColor(str) {
-        const colors = ['#54a0ff', '#1dd1a1', '#00d2d3', '#5f27cd', '#576574'];
+        // 어두운 배경에 어울리는 약간 채도 높은 그라데이션 컬러
+        const colors = [
+            'linear-gradient(135deg, #3b82f6, #2563eb)', // Blue
+            'linear-gradient(135deg, #10b981, #059669)', // Emerald
+            'linear-gradient(135deg, #8b5cf6, #7c3aed)', // Violet
+            'linear-gradient(135deg, #f59e0b, #d97706)', // Amber
+            'linear-gradient(135deg, #ec4899, #db2777)', // Pink
+            'linear-gradient(135deg, #6366f1, #4f46e5)'  // Indigo
+        ];
         let hash = 0;
         for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
         return colors[Math.abs(hash) % colors.length];
