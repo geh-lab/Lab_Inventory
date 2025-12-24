@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lab Inventory (Auto Compress)</title>
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --text-main: #333d4b;
+            --text-sub: #8b95a1;
+            --primary: #3182f6;
+            --green: #27ae60;
+            --danger: #e95353;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0; padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding-top: max(env(safe-area-inset-top), 10px);
+        }
+
+        .header-inner {
+            max-width: 800px; margin: 0 auto;
+            display: flex; flex-direction: column; gap: 12px;
+            padding: 12px 20px;
+        }
+
+        .type-switch { display: flex; background: #e9ecef; padding: 4px; border-radius: 10px; }
+        .switch-btn { flex: 1; border: none; background: transparent; padding: 10px 0; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--text-sub); cursor: pointer; transition: 0.2s; }
+        .switch-btn.active { background: #fff; color: var(--text-main); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .switch-btn[data-type="greenhouse"].active { color: var(--green); }
+        .switch-btn[data-type="lab"].active { color: var(--primary); }
+
+        .header-top { display: flex; width: 100%; gap: 10px; }
+        .search-box { flex: 1; background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 0 14px; height: 44px; display: flex; align-items: center; }
+        input#search { width: 100%; border: none; background: transparent; font-size: 15px; outline: none; }
+        
+        button#addBtn { width: 44px; height: 44px; background: var(--text-main); border: none; border-radius: 10px; color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+        #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 800px; margin: 0 auto; padding: 20px 20px 100px 20px; }
+        
+        .item { background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.03); cursor: pointer; transition: transform 0.2s; position: relative; }
+        .item:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+
+        .thumb-box { width: 100%; aspect-ratio: 4 / 3; background: #f8f9fa; position: relative; }
+        .thumb-img { width: 100%; height: 100%; object-fit: cover; }
+        .thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; color: #fff; }
+
+        .qty-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; backdrop-filter: blur(4px); }
+        .qty-badge.low { background: var(--danger); }
+
+        .info-box { padding: 12px; }
+        .title { font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .meta-info { font-size: 12px; color: var(--text-sub); display: flex; flex-direction: column; gap: 2px; }
+        .tag-row { margin-top: 8px; display: flex; gap: 4px; }
+        .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f2f5; color: #555; font-weight: 600; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-card { background: #fff; width: 90%; max-width: 400px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: popUp 0.2s ease-out; max-height: 90vh; overflow-y: auto; }
+        @keyframes popUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .modal-body { display: flex; gap: 16px; margin-bottom: 20px; }
+        .modal-thumb { width: 90px; height: 90px; border-radius: 10px; background: #eee; object-fit: cover; border: 1px solid #ddd; }
+        .modal-placeholder { width: 90px; height: 90px; border-radius: 10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:30px; font-weight:bold; }
+        .modal-right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+
+        .inp-full-edit { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; background: #fafafa; box-sizing: border-box; }
+        .inp-full-edit:focus { background: #fff; border-color: var(--text-main); outline:none; }
+        
+        .qty-control { display: flex; align-items: center; border: 1px solid #ddd; border-radius: 8px; width: fit-content; background: #fff; }
+        .qty-btn { width: 32px; height: 32px; border: none; background: transparent; font-size: 16px; cursor: pointer; color: #555; }
+        .qty-val { width: 40px; text-align: center; border: none; font-weight: bold; font-size: 16px; }
+
+        .btn-row { display: flex; gap: 8px; margin-top: 20px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; }
+        .btn-save { background: var(--text-main); color: #fff; }
+        .btn-del { background: #fff5f5; color: var(--danger); }
+        .btn-cancel { background: #f5f5f5; color: #777; }
+        
+        .btn-upload { background: #f2f4f6; color: #333; font-size: 12px; padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; width: 100%; margin-top: 5px; }
+
+        .inp-group { margin-bottom: 12px; }
+        .inp-label { display: block; font-size: 12px; font-weight: 700; color: #888; margin-bottom: 4px; }
+        .inp-field { width: 100%; height: 42px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; font-size: 15px; box-sizing: border-box; }
+        
+        .chip-group { display: flex; gap: 8px; margin-bottom: 12px; }
+        .chip-radio { display: none; }
+        .chip-label { padding: 6px 12px; border-radius: 20px; border: 1px solid #ddd; font-size: 13px; color: #666; cursor: pointer; background: #fff; }
+        .chip-radio:checked + .chip-label { background: var(--text-main); color: #fff; border-color: var(--text-main); font-weight: 600; }
+        
+        /* 숨겨진 파일 인풋 */
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-inner">
+        <div class="type-switch">
+            <button class="switch-btn active" data-type="greenhouse" onclick="switchType('greenhouse')">온실</button>
+            <button class="switch-btn" data-type="lab" onclick="switchType('lab')">실험실</button>
+            <button class="switch-btn" data-type="etc" onclick="switchType('etc')">기타</button>
+        </div>
+        <div class="header-top">
+            <div class="search-box">
+                <input type="text" id="search" placeholder="물품 검색..." onkeyup="handleSearch()">
+            </div>
+            <button id="addBtn" onclick="openAddModal()">＋</button>
+        </div>
+    </div>
+</header>
+
+<div id="list"></div>
+
+<div id="editModal" class="modal-overlay" onclick="closeEditModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+        <div style="font-size:18px; font-weight:800; margin-bottom:20px;">상세 정보</div>
+        
+        <div class="modal-body">
+            <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                <img id="mThumb" class="modal-thumb" src="" onerror="this.style.display='none'">
+                <div id="mPlaceholder" class="modal-placeholder" style="display:none"></div>
+                <button class="btn-upload" onclick="document.getElementById('mFileInput').click()">사진 변경</button>
+                <input type="file" id="mFileInput" accept="image/*" onchange="handleFileSelect(this, 'mThumb', 'mPlaceholder')">
+            </div>
+            
+            <div class="modal-right">
+                <input type="text" id="mNameInput" class="inp-full-edit" style="font-weight:bold;">
+                <input type="text" id="mUsageInput" class="inp-full-edit" placeholder="용도/설명">
+                <input type="text" id="mLocInput" class="inp-full-edit" placeholder="세부 위치">
+                
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
+                    <span style="font-size:13px; font-weight:600; color:#555;">수량</span>
+                    <div class="qty-control">
+                        <button class="qty-btn" onclick="changeValLocal(-1)">-</button>
+                        <input type="number" id="mQty" class="qty-val" value="0" readonly>
+                        <button class="qty-btn" onclick="changeValLocal(1)">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chip-group" style="justify-content: center;">
+            <label><input type="radio" name="mCat" value="장비" class="chip-radio"><span class="chip-label">장비</span></label>
+            <label><input type="radio" name="mCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-del" onclick="openDeleteModal()">삭제</button>
+            <button class="btn btn-cancel" onclick="closeEditModal(null)">취소</button>
+            <button class="btn btn-save" onclick="saveEditItem()">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="addModal" class="modal-overlay" onclick="closeAddModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+        <div style="font-size:18px; font-weight:800; text-align:center; margin-bottom:20px;">새 물품 등록</div>
+        
+        <div class="inp-group">
+            <label class="inp-label">물품 이름</label>
+            <input type="text" id="newName" class="inp-field" placeholder="예: 바질 화분">
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <div class="inp-group" style="flex:1;">
+                <label class="inp-label">수량</label>
+                <input type="number" id="newQty" class="inp-field" value="1">
+            </div>
+            <div class="inp-group" style="flex:1;">
+                <label class="inp-label">세부 위치</label>
+                <input type="text" id="newLoc" class="inp-field" placeholder="예: A열 3번">
+            </div>
+        </div>
+
+        <div class="inp-group">
+            <label class="inp-label">분류</label>
+            <div class="chip-group">
+                <label><input type="radio" name="newCat" value="장비" class="chip-radio" checked><span class="chip-label">장비</span></label>
+                <label><input type="radio" name="newCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
+            </div>
+        </div>
+
+        <div class="inp-group">
+            <label class="inp-label">용도 / 설명</label>
+            <input type="text" id="newUsage" class="inp-field">
+        </div>
+        
+        <div class="inp-group">
+            <label class="inp-label">사진 등록</label>
+            <button class="btn-upload" onclick="document.getElementById('newFileInput').click()" style="height:42px; margin-top:0;">사진 선택 (자동 압축)</button>
+            <input type="file" id="newFileInput" accept="image/*" onchange="handleFileSelect(this, 'previewNew', 'previewLabel')">
+            <div style="margin-top:8px; text-align:center;">
+                <img id="previewNew" style="width:100px; height:100px; object-fit:cover; border-radius:8px; display:none;">
+                <span id="previewLabel" style="font-size:12px; color:#aaa;">선택된 사진 없음</span>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-cancel" onclick="closeAddModal(null)">취소</button>
+            <button class="btn btn-save" onclick="saveNewItem()">등록</button>
+        </div>
+    </div>
+</div>
+
+<div id="deleteModal" class="modal-overlay" style="z-index:300;" onclick="closeDeleteModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+        <div style="text-align:center; margin-bottom:20px;">정말 삭제하시겠습니까?</div>
+        <div class="btn-row">
+            <button class="btn btn-cancel" onclick="closeDeleteModal(null)">취소</button>
+            <button class="btn btn-del" onclick="confirmDelete()">삭제</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentType = 'greenhouse';
+    let currentTab = 'ALL';
+    let selectedId = null;
+    let tempEditData = {};
+    let tempUploadedImg = null; // 업로드된 이미지를 임시 저장하는 변수
+
+    // 초기 샘플 데이터
+    const fakeDB = {
+        greenhouse: [
+            { id: '1', name: "플라스틱 포트 10호", loc: "A구역 선반", qty: 50, usage: "육묘용", cat: "소모품" },
+            { id: '2', name: "원예용 상토", loc: "입구 창고", qty: 3, usage: "분갈이 흙", cat: "소모품" },
+        ],
+        lab: [
+            { id: '10', name: "비커 500ml", loc: "유리 기구장", qty: 12, usage: "용액 제조", cat: "장비" },
+        ],
+        etc: []
+    };
+    
+    let currentDataList = [];
+
+    function init() { switchType('greenhouse'); }
+
+    window.switchType = function(type) {
+        currentType = type;
+        document.querySelectorAll('.switch-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
+        currentDataList = fakeDB[type] || [];
+        document.getElementById('search').value = '';
+        render();
+    }
+
+    window.render = function() {
+        const listEl = document.getElementById('list');
+        listEl.innerHTML = '';
+        const searchQuery = document.getElementById('search').value.toLowerCase();
+        currentDataList.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+        const filtered = currentDataList.filter(item => {
+            if (searchQuery) return item.name.toLowerCase().includes(searchQuery) || (item.usage && item.usage.toLowerCase().includes(searchQuery));
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            listEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#8b95a1; margin-top:60px;">물품이 없습니다.</div>';
+            return;
+        }
+
+        filtered.forEach(obj => {
+            const div = document.createElement('div');
+            div.className = 'item';
+            let imgHtml = obj.img ? 
+                `<img class="thumb-img" src="${obj.img}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                 <div class="thumb-placeholder" style="display:none; background:${getMutedColor(obj.name)}">${obj.name.charAt(0)}</div>` :
+                `<div class="thumb-placeholder" style="background:${getMutedColor(obj.name)}">${obj.name.charAt(0)}</div>`;
+
+            const qtyClass = obj.qty <= 3 ? 'qty-badge low' : 'qty-badge';
+
+            div.innerHTML = `
+                <div class="thumb-box">
+                    ${imgHtml}
+                    <div class="${qtyClass}">${obj.qty}</div>
+                </div>
+                <div class="info-box">
+                    <div class="title">${obj.name}</div>
+                    <div class="meta-info">
+                        <span>${obj.loc || '위치 미지정'}</span>
+                        <div class="tag-row"><span class="tag">${obj.cat || '기타'}</span></div>
+                    </div>
+                </div>
+            `;
+            div.onclick = () => openEditModal(obj.id);
+            listEl.appendChild(div);
+        });
+    };
+
+    // --- ⭐ 이미지 압축 로직 (핵심) ---
+    window.handleFileSelect = function(input, imgId, placeholderId) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                // 이미지를 캔버스로 그려서 리사이징 및 압축
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 최대 크기 설정 (예: 600px)
+                    const MAX_WIDTH = 600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // 압축률 0.7 (70% 퀄리티)로 변환
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    // 미리보기 업데이트
+                    const imgEl = document.getElementById(imgId);
+                    if(imgEl) { imgEl.src = dataUrl; imgEl.style.display = 'block'; }
+                    const plEl = document.getElementById(placeholderId);
+                    if(plEl) plEl.style.display = 'none';
+
+                    // 데이터 저장용 변수에 할당
+                    tempUploadedImg = dataUrl;
+                };
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // --- 모달 로직 ---
+    window.openEditModal = function(id) {
+        selectedId = id;
+        const item = currentDataList.find(i => i.id === id);
+        if(!item) return;
+        tempEditData = { ...item };
+        tempUploadedImg = item.img; // 기존 이미지 유지
+
+        document.getElementById('mNameInput').value = tempEditData.name;
+        document.getElementById('mUsageInput').value = tempEditData.usage || '';
+        document.getElementById('mLocInput').value = tempEditData.loc || '';
+        document.getElementById('mQty').value = tempEditData.qty;
+        
+        const radios = document.getElementsByName('mCat');
+        radios.forEach(r => r.checked = (r.value === (tempEditData.cat || '장비')));
+
+        // 썸네일 표시
+        const mThumb = document.getElementById('mThumb');
+        const mPlaceholder = document.getElementById('mPlaceholder');
+        if(tempEditData.img) { mThumb.src = tempEditData.img; mThumb.style.display = 'block'; mPlaceholder.style.display = 'none'; }
+        else { mThumb.style.display = 'none'; mPlaceholder.style.display = 'flex'; mPlaceholder.innerText = tempEditData.name.charAt(0); mPlaceholder.style.backgroundColor = getMutedColor(tempEditData.name); }
+        
+        document.getElementById('editModal').style.display = 'flex';
+    };
+
+    window.saveEditItem = function() {
+        if (!selectedId) return;
+        const target = currentDataList.find(i => i.id === selectedId);
+        if (target) {
+            target.name = document.getElementById('mNameInput').value;
+            target.usage = document.getElementById('mUsageInput').value;
+            target.loc = document.getElementById('mLocInput').value;
+            target.qty = parseInt(document.getElementById('mQty').value);
+            target.img = tempUploadedImg; // 압축된 이미지 저장
+            
+            const radios = document.getElementsByName('mCat');
+            for(let r of radios) if(r.checked) target.cat = r.value;
+        }
+        document.getElementById('editModal').style.display = 'none';
+        render();
+    };
+
+    window.openAddModal = () => { 
+        document.getElementById('newName').value=''; document.getElementById('newQty').value=1; 
+        document.getElementById('newLoc').value=''; document.getElementById('newUsage').value=''; 
+        // 초기화
+        tempUploadedImg = null;
+        document.getElementById('newFileInput').value = '';
+        document.getElementById('previewNew').style.display = 'none';
+        document.getElementById('previewLabel').style.display = 'block';
+        
+        document.getElementById('addModal').style.display='flex'; 
+    }
+
+    window.saveNewItem = function() {
+        const name = document.getElementById('newName').value.trim();
+        if (!name) return alert('이름을 입력하세요');
+        let cat = '장비';
+        const radios = document.getElementsByName('newCat');
+        for(let r of radios) if(r.checked) cat = r.value;
+
+        const newItem = {
+            id: Date.now().toString(),
+            name: name,
+            qty: parseInt(document.getElementById('newQty').value) || 0,
+            loc: document.getElementById('newLoc').value,
+            usage: document.getElementById('newUsage').value,
+            img: tempUploadedImg, // 압축된 이미지 사용
+            cat: cat
+        };
+        fakeDB[currentType].push(newItem);
+        document.getElementById('addModal').style.display = 'none';
+        render();
+    }
+
+    // 유틸
+    window.changeValLocal = (v) => { let el = document.getElementById('mQty'); el.value = Math.max(0, parseInt(el.value) + v); }
+    window.handleSearch = () => render();
+    function getMutedColor(str) {
+        const colors = ['#54a0ff', '#1dd1a1', '#00d2d3', '#5f27cd', '#576574', '#222f3e', '#10ac84'];
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    }
+    
+    // 모달 닫기
+    window.closeEditModal = (e) => { if(!e || e.target.id === 'editModal') document.getElementById('editModal').style.display = 'none'; }
+    window.closeAddModal = (e) => { if(!e || e.target.id === 'addModal') document.getElementById('addModal').style.display = 'none'; }
+    window.closeDeleteModal = (e) => { if(!e || e.target.id === 'deleteModal') document.getElementById('deleteModal').style.display = 'none'; }
+    window.openDeleteModal = () => document.getElementById('deleteModal').style.display = 'flex';
+    window.confirmDelete = () => { fakeDB[currentType] = fakeDB[currentType].filter(i => i.id !== selectedId); render(); document.getElementById('deleteModal').style.display = 'none'; document.getElementById('editModal').style.display = 'none'; }
+    document.addEventListener('keydown', (e) => { if(e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(el => el.style.display = 'none'); });
+
+    init();
+</script>
+</body>
+</html>
