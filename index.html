@@ -402,8 +402,9 @@
     <div class="modal-card dialog-card" onclick="event.stopPropagation()">
         <div id="dialogTitle" class="dialog-title">알림</div>
         <div id="dialogMsg" class="dialog-msg">메시지</div>
+        
         <input type="password" id="dialogInput" class="dialog-input" style="display:none;" placeholder="입력하세요">
-        <div class="btn-row" style="margin-top:10px;">
+        <div class="btn-row" style="margin-top:10px; flex-direction:column;">
             <button id="dialogCancelBtn" class="btn btn-cancel">취소</button>
             <button id="dialogOkBtn" class="btn btn-save">확인</button>
         </div>
@@ -411,8 +412,17 @@
 </div>
 
 <script type="module">
-    const PW_ADMIN = "ghksrud1315";
-    const PW_GUEST = "1234";        
+    // =========================================================================
+    // 1. 설정 (내 정보 & 게스트 정보)
+    // =========================================================================
+    const ADMIN_EMAIL = "envlab1315@gmail.com";  // 사장님 구글 이메일
+    
+    // 게스트용 계정 (Firebase 콘솔에 만들어둔 것)
+    const GUEST_EMAIL = "guest@lab.com";
+    const GUEST_PW_REAL = "guest1234"; 
+    
+    // ⭐ 사용자가 입력할 게스트 비밀번호 (이것만 바꾸면 됩니다)
+    const GUEST_PIN_INPUT = "1234"; 
 
     const firebaseConfig = {
         apiKey: "AIzaSyCzMpS-PnOPEnCL6Fqk8VteNzHMrpXMmS8",
@@ -424,185 +434,186 @@
         appId: "1:218879100576:web:74e6b66f3400cc5c286bc5"
     };
 
+    // =========================================================================
+    // 2. 라이브러리 및 초기화
+    // =========================================================================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getAuth, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
 
     let localDB = {}; 
-    let selectedId = null;
+    let selectedId = null; 
     let selectedCategory = null; 
     let tempImgData = null; 
     let currentFilter = 'all';
     
-    let userMode = 'viewer';
-    let guestTimer = null;
-    let remainingTime = 0;
+    let userMode = 'viewer'; 
+    let guestTimer = null; 
 
-    // --- 키보드 이벤트 핸들러 (Enter/ESC) ---
-    document.addEventListener('keydown', function(e) {
-        const dialog = document.getElementById('dialogModal');
-        // 다이얼로그가 열려있을 때
-        if (dialog.style.display === 'flex') {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                document.getElementById('dialogOkBtn').click();
-            } else if (e.key === 'Escape') {
-                if (document.getElementById('dialogCancelBtn').style.display === 'none') {
-                     document.getElementById('dialogOkBtn').click(); // Alert는 OK
-                } else {
-                     document.getElementById('dialogCancelBtn').click(); // 나머지는 취소
-                }
+    // =========================================================================
+    // 3. 로그인 상태 감지 (자동 처리)
+    // =========================================================================
+    onAuthStateChanged(auth, (user) => {
+        if(guestTimer) { clearInterval(guestTimer); guestTimer = null; }
+
+        if (user) {
+            if (user.email === ADMIN_EMAIL) {
+                // 관리자
+                userMode = 'admin';
+                document.body.classList.add('admin-mode');
+                document.body.classList.remove('guest-mode');
+                document.getElementById('modeText').innerText = '🔓 관리자 모드';
+            } else if (user.email === GUEST_EMAIL) {
+                // 게스트
+                userMode = 'guest';
+                document.body.classList.add('guest-mode');
+                document.body.classList.remove('admin-mode');
+                startGuestTimer(600); // 10분
+            } else {
+                alert("권한이 없는 사용자입니다.");
+                signOut(auth);
+                return;
             }
-            return; 
+        } else {
+            // 비로그인
+            userMode = 'viewer';
+            document.body.classList.remove('admin-mode', 'guest-mode');
+            document.getElementById('modeText').innerText = '🔒 View Only';
         }
-
-        // 모달창이 열려있을 때
-        const editModal = document.getElementById('editModal');
-        const addModal = document.getElementById('addModal');
-        const activeModal = (editModal.style.display === 'flex') ? editModal :
-                            (addModal.style.display === 'flex') ? addModal : null;
-
-        if (activeModal) {
-            if (e.key === 'Escape') {
-                closeModal(activeModal.id);
-            } else if (e.key === 'Enter') {
-                if (document.activeElement.tagName === 'TEXTAREA') return; // 텍스트 영역 줄바꿈 허용
-                e.preventDefault();
-                if (activeModal === addModal) createItem();
-                else saveItem();
-            }
-        }
+        updateUI();
     });
 
-    // --- 다이얼로그 (로직 수정됨) ---
-    let dialogCallback = null;
-    window.showDialog = (type, title, msg, callback) => {
-        const modal = document.getElementById('dialogModal');
-        const inputEl = document.getElementById('dialogInput');
-        document.getElementById('dialogTitle').innerText = title;
-        document.getElementById('dialogMsg').innerText = msg;
-        dialogCallback = callback;
-        
-        inputEl.value = ''; inputEl.style.display = 'none';
-        document.getElementById('dialogCancelBtn').style.display = 'block';
-        const okBtn = document.getElementById('dialogOkBtn');
-        okBtn.innerText = '확인'; okBtn.className = 'btn btn-save';
-
-        if (type === 'alert') document.getElementById('dialogCancelBtn').style.display = 'none';
-        else if (type === 'prompt') { 
-            inputEl.style.display = 'block'; 
-            setTimeout(() => inputEl.focus(), 100); 
-        }
-        else if (type === 'confirm') { okBtn.innerText = '실행'; okBtn.className = 'btn btn-del'; }
-
-        modal.style.display = 'flex';
-        
-        // 기존 이벤트 제거 및 새 이벤트 할당
-        okBtn.onclick = () => {
-            const val = inputEl.value;
-            modal.style.display = 'none'; // 먼저 닫고
-            setTimeout(() => { // 딜레이 후 콜백 실행 (충돌 방지)
-                if (type === 'prompt') { if(callback) callback(val); }
-                else { if(callback) callback(true); }
-            }, 100);
-        };
-        document.getElementById('dialogCancelBtn').onclick = () => {
-            if (callback && type === 'confirm') callback(false);
-            modal.style.display = 'none';
-        };
-    };
-
-    // --- 모드 관리 ---
-    function updateModeUI() {
-        const modeBtn = document.getElementById('modeBtn');
-        const modeText = document.getElementById('modeText');
-        const readOnlyBadge = document.getElementById('readOnlyBadge');
-        
-        document.body.classList.remove('admin-mode', 'guest-mode');
-        
-        if (userMode === 'admin') {
-            document.body.classList.add('admin-mode');
-            modeText.innerText = '🔓 Admin Mode';
-            if(readOnlyBadge) readOnlyBadge.style.display = 'none';
-        } else if (userMode === 'guest') {
-            document.body.classList.add('guest-mode');
-            if(readOnlyBadge) readOnlyBadge.style.display = 'none';
-        } else {
-            modeText.innerText = '🔒 View Only';
-            if(readOnlyBadge) readOnlyBadge.style.display = 'inline-block';
-        }
-
-        if (document.getElementById('editModal').style.display === 'flex') {
-            const inputs = document.querySelectorAll('#editModal .inp-full-edit, #editModal textarea, #editModal input[type="radio"]');
-            inputs.forEach(el => el.disabled = (userMode === 'viewer'));
-        }
-    }
-
-    function startGuestTimer() {
-        if(guestTimer) clearInterval(guestTimer);
-        remainingTime = 600; 
-        updateModeUI();
-        
+    function startGuestTimer(seconds) {
+        let remaining = seconds;
+        updateTimerDisplay(remaining);
         guestTimer = setInterval(() => {
-            remainingTime--;
-            if (remainingTime <= 0) {
-                logout();
-                showDialog('alert', '알림', '게스트 세션이 만료되었습니다.');
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(guestTimer);
+                signOut(auth).then(() => alert("게스트 세션(10분)이 만료되었습니다."));
             } else {
-                const min = Math.floor(remainingTime / 60);
-                const sec = remainingTime % 60;
-                if(userMode === 'guest') {
-                    document.getElementById('modeText').innerText = `⏳ ${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-                }
+                updateTimerDisplay(remaining);
             }
         }, 1000);
     }
-
-    function logout() {
-        userMode = 'viewer';
-        if(guestTimer) clearInterval(guestTimer);
-        guestTimer = null;
-        updateModeUI();
+    
+    function updateTimerDisplay(sec) {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        document.getElementById('modeText').innerText = `⏳ 게스트 ${m}:${String(s).padStart(2,'0')}`;
     }
 
+    // =========================================================================
+    // 4. 로그인 팝업 (관리자 구글 vs 게스트 1234)
+    // =========================================================================
     window.toggleMode = () => {
         if (userMode !== 'viewer') {
-            logout();
-            showDialog('alert', '알림', '로그아웃 되었습니다.');
-        } else {
-            // 재귀 함수 (틀리면 다시 묻기)
-            const askLogin = () => {
-                showDialog('prompt', '권한 인증', '비밀번호를 입력하세요:', (input) => {
-                    if (input === null) return; // 취소
-                    
-                    if (input === PW_ADMIN) {
-                        userMode = 'admin';
-                        if(guestTimer) clearInterval(guestTimer);
-                        updateModeUI();
-                        showDialog('alert', '환영합니다', '관리자 모드로 전환되었습니다.');
-                    } else if (input === PW_GUEST) {
-                        userMode = 'guest';
-                        startGuestTimer();
-                        showDialog('alert', '환영합니다', '게스트 모드 (10분) 시작됩니다.');
-                    } else {
-                        // 틀렸을 때 알림 후 다시 입력창
-                        showDialog('alert', '오류', '비밀번호가 틀렸습니다.', () => {
-                            setTimeout(askLogin, 100);
-                        });
-                    }
-                });
-            };
-            askLogin();
+            // ⭐ 로그아웃도 예쁜 모달창 사용
+            showDialog('confirm', '로그아웃', '정말 로그아웃 하시겠습니까?', (res) => {
+                if(res) signOut(auth);
+            });
+            return;
         }
+        showLoginOptions();
     };
+
+    function showLoginOptions() {
+        const modal = document.getElementById('dialogModal');
+        const title = document.getElementById('dialogTitle');
+        const msg = document.getElementById('dialogMsg');
+        const btnRow = modal.querySelector('.btn-row');
+        // 기존 input 숨기기 (우리가 직접 만들 거라)
+        document.getElementById('dialogInput').style.display = 'none';
+
+        title.innerText = "로그인";
+        msg.innerHTML = "관리자 또는 게스트로 접속하세요.";
+        
+        // 팝업 내용 커스텀 (구글 버튼 + 비밀번호 입력창)
+        const oldHtml = btnRow.innerHTML;
+        btnRow.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:16px; width:100%;">
+                
+                <button class="btn btn-save" style="background:#4285F4; width:100%; height:48px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="loginGoogle()">
+                    <span style="font-weight:800; font-size:15px;">G</span> 관리자 로그인
+                </button>
+                
+                <div style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:center; line-height:0.1em; margin: 4px 0; color:#aaa;">
+                    <span style="background:#1e293b; padding:0 10px; font-size:12px;">OR</span>
+                </div>
+
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="password" id="guestPinInput" placeholder="게스트 비번" 
+                        style="width:180px; flex:none; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:10px; padding:0 12px; color:#fff; height:48px; text-align:center; font-size:16px; box-sizing:border-box;">
+                    
+                    <button class="btn btn-save" style="background:#F59E0B; flex:1; height:48px; padding:0; display:flex; align-items:center; justify-content:center; box-sizing:border-box; white-space:nowrap;" onclick="checkGuestPin()">접속하기</button>
+                </div>
+
+                <button class="btn btn-cancel" style="width:100%; height:44px;" onclick="closeLoginDialog()">취소</button>
+            </div>
+        `;
+
+        modal.style.display = 'flex';
+        
+        // 게스트 비번창에 포커스 & 엔터키 처리
+        setTimeout(() => {
+            const pinInput = document.getElementById('guestPinInput');
+            if(pinInput) {
+                pinInput.focus();
+                pinInput.onkeyup = (e) => { if(e.key === 'Enter') checkGuestPin(); };
+            }
+        }, 100);
+
+        // 헬퍼 함수들
+        window.closeLoginDialog = () => {
+            modal.style.display = 'none';
+            btnRow.innerHTML = oldHtml; 
+        };
+
+        window.loginGoogle = () => {
+            window.closeLoginDialog();
+            signInWithPopup(auth, googleProvider).catch(err => alert("로그인 실패: " + err.message));
+        };
+
+        window.checkGuestPin = () => {
+            const inputVal = document.getElementById('guestPinInput').value;
+            if (inputVal === GUEST_PIN_INPUT) {
+                // 1234 맞으면 -> 코드가 알아서 로그인 처리
+                window.closeLoginDialog();
+                signInWithEmailAndPassword(auth, GUEST_EMAIL, GUEST_PW_REAL)
+                    .then(() => showDialog('alert', '접속 성공', '게스트 모드로 접속합니다. (10분)'))
+                    .catch(err => alert("게스트 설정 오류: " + err.message));
+            } else {
+                alert("비밀번호가 틀렸습니다.");
+                document.getElementById('guestPinInput').value = '';
+                document.getElementById('guestPinInput').focus();
+            }
+        };
+    }
+
+    // =========================================================================
+    // 5. 기타 필수 함수 (UI, CRUD) - 기존과 동일
+    // =========================================================================
+    function updateUI() {
+        const isEditable = (userMode === 'admin' || userMode === 'guest');
+        const addBtn = document.getElementById('addBtn');
+        if(addBtn) addBtn.style.display = isEditable ? 'flex' : 'none';
+        document.querySelectorAll('.editable-only').forEach(el => {
+            if(el.classList.contains('qty-btn')) el.style.display = isEditable ? 'flex' : 'none';
+            else el.style.display = isEditable ? 'inline-block' : 'none';
+        });
+        document.querySelectorAll('#editModal input, #editModal textarea, #editModal button.qty-btn').forEach(el => {
+            if(!el.classList.contains('btn-cancel')) el.disabled = !isEditable;
+        });
+    }
 
     window.setFilter = (filterType) => {
         currentFilter = filterType;
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.filter === filterType);
-        });
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === filterType));
         render(); 
     };
 
@@ -618,77 +629,46 @@
         listEl.innerHTML = '';
         const query = document.getElementById('search').value.toLowerCase();
         let allItems = [];
-
         ['greenhouse', 'lab', 'etc'].forEach(cat => {
             const catData = localDB[cat] || {};
-            Object.entries(catData).forEach(([key, val]) => {
-                allItems.push({ id: key, ...val, sourceCategory: cat });
-            });
+            Object.entries(catData).forEach(([key, val]) => { allItems.push({ id: key, ...val, sourceCategory: cat }); });
         });
-
         const filtered = allItems.filter(item => {
             if (currentFilter !== 'all' && item.sourceCategory !== currentFilter) return false;
             if (!query) return true;
-            return item.name.toLowerCase().includes(query) || 
-                   (item.usage && item.usage.toLowerCase().includes(query)) ||
-                   (item.loc && item.loc.toLowerCase().includes(query));
+            return item.name.toLowerCase().includes(query) || (item.usage && item.usage.toLowerCase().includes(query)) || (item.loc && item.loc.toLowerCase().includes(query));
         });
-
         filtered.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-
         if (filtered.length === 0) {
             listEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#cbd5e1; margin-top:60px;">데이터가 없습니다.</div>';
             return;
         }
-
         filtered.forEach(item => {
             const div = document.createElement('div');
-            let themeClass = 'theme-etc';
-            let locName = '기타';
-            if(item.sourceCategory === 'greenhouse') { themeClass = 'theme-greenhouse'; locName = '온실'; }
-            else if(item.sourceCategory === 'lab') { themeClass = 'theme-lab'; locName = '실험실'; }
-            
+            let themeClass = item.sourceCategory === 'greenhouse' ? 'theme-greenhouse' : (item.sourceCategory === 'lab' ? 'theme-lab' : 'theme-etc');
+            let locName = item.sourceCategory === 'greenhouse' ? '온실' : (item.sourceCategory === 'lab' ? '실험실' : '기타');
             div.className = `item ${themeClass}`; 
             div.onclick = () => openEditModal(item);
-
-            let imageContent = '';
-            if (item.img) {
-                imageContent = `<img class="card-img" src="${item.img}">`;
-            } else {
-                imageContent = `<div class="card-placeholder" style="background:${getColor(item.name)}">${item.name.charAt(0)}</div>`;
-            }
-
+            let imageContent = item.img ? `<img class="card-img" src="${item.img}">` : `<div class="card-placeholder" style="background:${getColor(item.name)}">${item.name.charAt(0)}</div>`;
             let catBadgeClass = (item.cat === '장비') ? 'cat-pill equip' : 'cat-pill consumable';
-            let catText = item.cat || '미분류';
-
             div.innerHTML = `
                 <div class="card-img-wrapper">
-                    ${imageContent}
-                    <div class="img-overlay-gradient"></div>
+                    ${imageContent}<div class="img-overlay-gradient"></div>
                     <span class="loc-badge-corner">${locName}</span>
-                    <div class="overlay-text-group">
-                        <div class="item-name-overlay">${item.name}</div>
-                    </div>
+                    <div class="overlay-text-group"><div class="item-name-overlay">${item.name}</div></div>
                 </div>
                 <div class="item-content-detailed">
-                    <div class="info-row-top">
-                        <span class="detail-loc">📍 ${item.loc || '미지정'}</span>
-                        <span class="detail-qty">${item.qty}개</span>
-                    </div>
-                    <div class="info-row-bottom">
-                        <span class="${catBadgeClass}">${catText}</span>
-                        <span class="separator">|</span>
-                        <span class="item-desc-text">${item.usage || '설명 없음'}</span>
-                    </div>
-                </div>
-            `;
+                    <div class="info-row-top"><span class="detail-loc">📍 ${item.loc || '미지정'}</span><span class="detail-qty">${item.qty}개</span></div>
+                    <div class="info-row-bottom"><span class="${catBadgeClass}">${item.cat || '미분류'}</span><span class="separator">|</span><span class="item-desc-text">${item.usage || '설명 없음'}</span></div>
+                </div>`;
             listEl.appendChild(div);
         });
     };
 
     window.createItem = () => {
+        if(userMode === 'viewer') return alert("권한이 없습니다.");
         const name = document.getElementById('newName').value.trim();
-        if (!name) return showDialog('alert', '입력 오류', '이름을 입력해주세요.');
+        if (!name) return alert('이름을 입력해주세요.');
         const targetLoc = document.querySelector('input[name="newLocType"]:checked').value;
         const newId = Date.now().toString(); 
         const newItem = {
@@ -696,66 +676,62 @@
             loc: document.getElementById('newLoc').value, usage: document.getElementById('newUsage').value,
             cat: document.querySelector('input[name="newCat"]:checked').value, img: tempImgData 
         };
-        set(ref(db, `inventory/${targetLoc}/${newId}`), newItem)
-            .then(() => closeModal('addModal')).catch((err) => showDialog('alert', '오류', err));
+        set(ref(db, `inventory/${targetLoc}/${newId}`), newItem).then(() => closeModal('addModal')).catch(err => alert("저장 실패: " + err.message));
     };
 
     window.saveItem = () => {
+        if(userMode === 'viewer') return alert("권한이 없습니다.");
         if (!selectedId || !selectedCategory) return;
         const newLocType = document.querySelector('input[name="mLocType"]:checked').value;
         const updatedItem = {
-            name: document.getElementById('mNameInput').value,
-            qty: parseInt(document.getElementById('mQty').value),
-            loc: document.getElementById('mLocInput').value,
-            usage: document.getElementById('mUsageInput').value,
-            cat: document.querySelector('input[name="mCat"]:checked').value,
-            img: tempImgData 
+            name: document.getElementById('mNameInput').value, qty: parseInt(document.getElementById('mQty').value),
+            loc: document.getElementById('mLocInput').value, usage: document.getElementById('mUsageInput').value,
+            cat: document.querySelector('input[name="mCat"]:checked').value, img: tempImgData 
         };
-
         if (newLocType !== selectedCategory) {
             remove(ref(db, `inventory/${selectedCategory}/${selectedId}`))
-            .then(() => set(ref(db, `inventory/${newLocType}/${selectedId}`), updatedItem))
-            .then(() => closeModal('editModal'))
-            .catch(err => showDialog('alert', '오류', err));
+                .then(() => set(ref(db, `inventory/${newLocType}/${selectedId}`), updatedItem))
+                .then(() => closeModal('editModal')).catch(err => alert("오류: " + err.message));
         } else {
             set(ref(db, `inventory/${selectedCategory}/${selectedId}`), updatedItem)
-            .then(() => closeModal('editModal'));
+                .then(() => closeModal('editModal')).catch(err => alert("오류: " + err.message));
         }
     };
 
     window.askDelete = () => {
-        showDialog('confirm', '삭제 확인', '정말 삭제하시겠습니까?', (res) => { if(res) deleteItem(); });
-    };
-    window.deleteItem = () => {
-        remove(ref(db, `inventory/${selectedCategory}/${selectedId}`)).then(() => closeModal('editModal'));
+        if(userMode === 'viewer') return alert("삭제 권한이 없습니다.");
+        // 삭제도 예쁜 모달로 변경
+        showDialog('confirm', '삭제 확인', '정말 이 물품을 삭제하시겠습니까?', (res) => {
+            if(res) {
+                 remove(ref(db, `inventory/${selectedCategory}/${selectedId}`)).then(() => closeModal('editModal')).catch(err => alert("삭제 실패: " + err.message));
+            }
+        });
     };
 
     window.handleFileSelect = (input, imgId, phId) => {
         if (input.files && input.files[0]) {
-            const file = input.files[0];
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_SIZE = 800; 
+                    const canvas = document.createElement('canvas'); const MAX_SIZE = 800; 
                     let w = img.width, h = img.height;
                     if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
                     canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                     tempImgData = canvas.toDataURL('image/jpeg', 0.8);
-                    const imgEl = document.getElementById(imgId);
-                    imgEl.src = tempImgData; imgEl.style.display = 'block';
+                    document.getElementById(imgId).src = tempImgData; 
+                    document.getElementById(imgId).style.display = 'block';
                     if(document.getElementById(phId)) document.getElementById(phId).style.display = 'none';
                 };
                 img.src = e.target.result;
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(input.files[0]);
         }
     };
 
     window.openAddModal = () => {
-        if(userMode === 'viewer') return showDialog('alert', '권한 없음', '관리자 또는 게스트 권한이 필요합니다.');
+        if(userMode === 'viewer') return alert("권한이 없습니다.");
         document.getElementById('newName').value = ''; document.getElementById('newQty').value = 1;
         document.getElementById('newLoc').value = ''; document.getElementById('newUsage').value = '';
         tempImgData = null; document.getElementById('previewNew').style.display = 'none';
@@ -763,28 +739,15 @@
     };
 
     window.openEditModal = (item) => {
-        if(!item) return; 
-        selectedId = item.id; selectedCategory = item.sourceCategory; tempImgData = item.img || null;
-        
-        document.getElementById('mNameInput').value = item.name;
-        document.getElementById('mLocInput').value = item.loc || '';
-        document.getElementById('mUsageInput').value = item.usage || '';
-        document.getElementById('mQty').value = item.qty;
-        
-        const catRadios = document.getElementsByName('mCat');
-        catRadios.forEach(r => r.checked = (r.value === item.cat));
-        const locRadios = document.getElementsByName('mLocType');
-        locRadios.forEach(r => r.checked = (r.value === item.sourceCategory));
-
-        const imgEl = document.getElementById('mThumb');
-        const phEl = document.getElementById('mPlaceholder');
+        if(!item) return; selectedId = item.id; selectedCategory = item.sourceCategory; tempImgData = item.img || null;
+        document.getElementById('mNameInput').value = item.name; document.getElementById('mLocInput').value = item.loc || '';
+        document.getElementById('mUsageInput').value = item.usage || ''; document.getElementById('mQty').value = item.qty;
+        document.getElementsByName('mCat').forEach(r => r.checked = (r.value === item.cat));
+        document.getElementsByName('mLocType').forEach(r => r.checked = (r.value === item.sourceCategory));
+        const imgEl = document.getElementById('mThumb'); const phEl = document.getElementById('mPlaceholder');
         if (item.img) { imgEl.src = item.img; imgEl.style.display = 'block'; phEl.style.display = 'none'; } 
         else { imgEl.style.display = 'none'; phEl.style.display = 'flex'; }
-
-        const inputs = document.querySelectorAll('#editModal .inp-full-edit, #editModal textarea, #editModal input[type="radio"]');
-        inputs.forEach(el => el.disabled = (userMode === 'viewer'));
-
-        document.getElementById('editModal').style.display = 'flex';
+        updateUI(); document.getElementById('editModal').style.display = 'flex';
     };
 
     window.closeModal = (id) => document.getElementById(id).style.display = 'none';
@@ -792,14 +755,32 @@
         const id = targetId || 'mQty'; const el = document.getElementById(id);
         if(el) el.value = Math.max(0, parseInt(el.value) + delta);
     };
-
     function getColor(str) {
         const colors = [ 'linear-gradient(135deg, #3b82f6, #2563eb)', 'linear-gradient(135deg, #10b981, #059669)', 'linear-gradient(135deg, #8b5cf6, #7c3aed)', 'linear-gradient(135deg, #f59e0b, #d97706)', 'linear-gradient(135deg, #ec4899, #db2777)' ];
         let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
         return colors[Math.abs(hash) % colors.length];
     }
-    
-    updateModeUI();
+
+    // 기본 다이얼로그 기능 (alert/confirm 대용) - 로그인창이 덮어쓰지 않도록 보존
+    window.showDialog = (type, title, msg, callback) => {
+        const modal = document.getElementById('dialogModal');
+        document.getElementById('dialogTitle').innerText = title;
+        document.getElementById('dialogMsg').innerText = msg;
+        const btnRow = modal.querySelector('.btn-row');
+        // 버튼 UI 복구
+        btnRow.innerHTML = `
+            <button id="dialogCancelBtn" class="btn btn-cancel">취소</button>
+            <button id="dialogOkBtn" class="btn btn-save">확인</button>
+        `;
+        document.getElementById('dialogInput').style.display = (type === 'prompt') ? 'block' : 'none';
+        
+        document.getElementById('dialogCancelBtn').style.display = (type === 'alert') ? 'none' : 'block';
+        document.getElementById('dialogOkBtn').onclick = () => { modal.style.display = 'none'; if(callback) callback(true); };
+        document.getElementById('dialogCancelBtn').onclick = () => { modal.style.display = 'none'; if(callback && type==='confirm') callback(false); };
+        modal.style.display = 'flex';
+    };
+
+    updateUI();
 </script>
 </body>
 </html>
