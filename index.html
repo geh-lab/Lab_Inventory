@@ -1,812 +1,394 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lab Inventory</title>
-    <style>
-        :root {
-            --bg-dark: #0f172a;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --glass-border: rgba(255, 255, 255, 0.15);
-            --glass-bg: rgba(30, 41, 59, 0.65);
-            --primary-color: #3b82f6;
-            --danger-color: #ef4444;
-            --greenhouse-color: #10b981;
-            --lab-color: #3b82f6;
-            --etc-color: #8b5cf6;
-        }
-
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0; padding: 0;
-            overflow-x: hidden;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        /* 배경 */
-        .bg-container {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
-            background-image: url('https://images.unsplash.com/photo-1635776062360-af423602aff3?q=80&w=3432&auto=format&fit=crop');
-            background-size: cover; background-position: center;
-        }
-        .bg-overlay {
-            position: absolute; inset: 0;
-            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
-        }
-        
-        /* 헤더 */
-        header {
-            position: sticky; top: 0; z-index: 100;
-            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-            border-bottom: 1px solid var(--glass-border);
-            padding-top: max(env(safe-area-inset-top), 20px); padding-bottom: 10px;
-            background: rgba(15, 23, 42, 0.7); box-shadow: 0 4px 30px rgba(0,0,0,0.2);
-        }
-        .header-inner { max-width: 1400px; margin: 0 auto; padding: 0 20px; display: flex; flex-direction: column; gap: 16px; }
-        
-        .header-row-top { display: flex; justify-content: space-between; align-items: center; }
-        .app-title { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
-        
-        .mode-btn {
-            background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);
-            border-radius: 12px; padding: 6px 12px; color: #fff; cursor: pointer;
-            display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; transition: 0.3s;
-        }
-        /* 모드별 색상 */
-        body.admin-mode .mode-btn { background: rgba(59, 130, 246, 0.3); border-color: var(--primary-color); color: #93c5fd; }
-        body.guest-mode .mode-btn { background: rgba(245, 158, 11, 0.3); border-color: #f59e0b; color: #fcd34d; }
-
-        /* 검색창 + 추가 버튼 */
-        .header-main { display: flex; gap: 10px; align-items: center; }
-        .search-box { 
-            flex: 1; height: 48px; background: rgba(255, 255, 255, 0.1); 
-            border: 1px solid var(--glass-border); border-radius: 14px; padding: 0 16px; 
-            display: flex; align-items: center; transition: 0.3s; 
-        }
-        .search-box:focus-within { background: rgba(255, 255, 255, 0.15); border-color: rgba(255,255,255,0.4); }
-        input#search { width: 100%; background: transparent; border: none; outline: none; color: #fff; font-size: 16px; }
-        
-        button#addBtn {
-            width: 48px; height: 48px; background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
-            border: 1px solid var(--glass-border); border-radius: 14px; color: #fff; font-size: 24px;
-            cursor: pointer; backdrop-filter: blur(4px); transition: 0.3s; display: flex; align-items: center; justify-content: center;
-        }
-        button#addBtn:hover { background: rgba(255,255,255,0.3); transform: scale(1.05); }
-
-        /* 필터 탭 */
-        .filter-view-row { display: flex; align-items: center; gap: 10px; overflow-x: auto; }
-        .filter-bar { display: flex; gap: 8px; }
-        
-        .filter-btn {
-            padding: 8px 18px; border-radius: 20px; border: 1px solid var(--glass-border);
-            background: rgba(255,255,255,0.05); color: #94a3b8; font-size: 14px; font-weight: 600;
-            cursor: pointer; transition: 0.2s; white-space: nowrap;
-        }
-        .filter-btn.active[data-filter="all"] { background: #fff; color: #0f172a; border-color: #fff; }
-        .filter-btn.active[data-filter="greenhouse"] { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border-color: #10b981; }
-        .filter-btn.active[data-filter="lab"] { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border-color: #3b82f6; }
-        .filter-btn.active[data-filter="etc"] { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border-color: #8b5cf6; }
-
-        /* 권한 없으면 숨김 */
-        body:not(.admin-mode):not(.guest-mode) .editable-only { display: none !important; }
-
-        /* --- 리스트 Grid (기본 5열) --- */
-        #list { 
-            display: grid; 
-            gap: 16px; 
-            max-width: 1400px; margin: 0 auto; 
-            padding: 24px 20px 100px 20px;
-            grid-template-columns: repeat(5, 1fr);
-        }
-        @media (max-width: 1200px) { #list { grid-template-columns: repeat(4, 1fr); } }
-        @media (max-width: 900px) { #list { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 600px) { #list { grid-template-columns: repeat(2, 1fr); } }
-
-        /* --- 카드 디자인 --- */
-        .item {
-            display: flex; flex-direction: column; cursor: pointer;
-            border-radius: 16px; overflow: hidden;
-            transition: transform 0.2s;
-            background: rgba(30, 41, 59, 0.75);
-            border: 1px solid var(--glass-border);
-            backdrop-filter: blur(10px);
-        }
-        .item:hover { transform: translateY(-4px); box-shadow: 0 15px 30px -5px rgba(0,0,0,0.5); }
-
-        .card-img-wrapper {
-            position: relative;
-            width: 100%; aspect-ratio: 1 / 1;
-            background: #1e293b; overflow: hidden;
-        }
-        .card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
-        .item:hover .card-img { transform: scale(1.05); }
-        .card-placeholder {
-            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-            font-size: 32px; font-weight: 800; color: rgba(255,255,255,0.9);
-        }
-
-        .img-overlay-gradient {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 60%;
-            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
-            pointer-events: none;
-        }
-
-        .loc-badge-corner {
-            position: absolute; top: 12px; left: 12px; z-index: 11;
-            padding: 6px 12px; border-radius: 10px;
-            font-size: 14px; font-weight: 800; color: #fff;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.4); 
-        }
-        .theme-greenhouse .loc-badge-corner { background: var(--greenhouse-color); }
-        .theme-lab .loc-badge-corner { background: var(--lab-color); }
-        .theme-etc .loc-badge-corner { background: var(--etc-color); }
-
-        .overlay-text-group {
-            position: absolute; bottom: 12px; left: 14px; right: 14px; z-index: 10;
-        }
-        .item-name-overlay {
-            color: #fff; line-height: 1.2; font-weight: 800;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-            font-size: 20px;
-        }
-        @media (max-width: 600px) { .item-name-overlay { font-size: 18px; } }
-
-        /* --- 하단 정보 --- */
-        .item-content-detailed { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
-        .info-row-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .detail-loc { font-size: 13px; color: #cbd5e1; display: flex; align-items: center; gap: 4px; font-weight: 500; }
-        .detail-qty { font-size: 14px; color: #fff; font-weight: 700; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 6px; }
-        .info-row-bottom { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-sub); }
-        .cat-pill { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
-        .cat-pill.equip { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
-        .cat-pill.consumable { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3); }
-        .item-desc-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; opacity: 0.8; font-size: 12px; }
-        .separator { color: rgba(255,255,255,0.2); font-size: 10px; }
-
-        /* --- 모달 (2단) --- */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 200; backdrop-filter: blur(8px); justify-content: center; align-items: center; }
-        .modal-card { 
-            background: #1e293b; width: 90%; max-width: 850px; 
-            padding: 24px; border-radius: 24px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #fff; max-height: 95vh; overflow-y: auto; box-sizing: border-box; 
-        }
-        
-        .modal-body-flex { display: flex; gap: 24px; margin-bottom: 20px; min-height: 400px; }
-        .modal-left-col-img { flex: 2; display: flex; flex-direction: column; gap: 12px; min-width: 300px; height: 100%; }
-        .modal-right-col-details { flex: 3; display: flex; flex-direction: column; gap: 16px; }
-
-        .modal-image-large-container {
-            width: 100%; flex: 1;
-            background: #0f172a; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);
-            position: relative; display: flex; justify-content: center; align-items: center;
-        }
-        #mThumb { width: 100%; height: 100%; object-fit: contain; display: none; } 
-        #mPlaceholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 16px; }
-
-        @media (max-width: 800px) {
-            .modal-body-flex { flex-direction: column; gap: 20px; }
-            .modal-left-col-img, .modal-right-col-details { width: 100%; min-width: 0; flex: auto; }
-            .modal-image-large-container { width: 100%; aspect-ratio: 1 / 1; flex: none; } 
-        }
-        
-        .inp-group { margin-bottom: 0; }
-        .inp-label { color: #94a3b8; font-size: 13px; margin-bottom: 12px; display: block; font-weight: 600; }
-        .inp-full-edit, .inp-field { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 12px; color: #fff; font-size: 15px; margin-bottom: 0; box-sizing: border-box; }
-        .inp-full-edit:focus, .inp-field:focus { border-color: var(--primary-color); outline: none; background: rgba(0,0,0,0.5); }
-        .inp-full-edit:disabled { opacity: 0.6; cursor: default; border-color: transparent; background: rgba(255,255,255,0.05); }
-        
-        .half-row { display: flex; gap: 12px; }
-        .half-row .inp-group { flex: 1; min-width: 0; }
-
-        .qty-control { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); height: 46px; width: 100%; box-sizing: border-box; overflow: hidden; }
-        .qty-btn { width: 40px; height: 100%; background: rgba(255,255,255,0.05); border: none; color: #fff; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; }
-        .qty-btn:active { background: rgba(255,255,255,0.15); }
-        .qty-val { flex: 1; width: 0; background: transparent; color: #fff; text-align: center; border: none; font-size: 18px; font-weight: bold; height: 100%; outline: none; padding: 0; }
-        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        
-        body:not(.admin-mode):not(.guest-mode) .qty-control { justify-content: center; background: rgba(255,255,255,0.05); border: none; }
-        body:not(.admin-mode):not(.guest-mode) .qty-val { background: transparent; }
-        
-        .btn-row { display: flex; gap: 10px; margin-top: 10px; }
-        .btn { flex: 1; padding: 14px; border-radius: 14px; font-weight: bold; border: none; cursor: pointer; font-size: 15px; transition: 0.2s; }
-        .btn-save { background: var(--primary-color); color: #fff; box-shadow: 0 4px 15px rgba(59,130,246,0.3); }
-        .btn-del { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .btn-cancel { background: rgba(255,255,255,0.1); color: #cbd5e1; }
-        
-        .chip-group { display: flex; gap: 12px; flex-wrap: wrap; }
-        .chip-label { padding: 8px 14px; background: rgba(255,255,255,0.05); border-radius: 20px; color: #aaa; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 13px; transition: 0.2s; flex: 1; text-align: center; }
-        .chip-radio:checked + .chip-label { background: #fff; color: #0f172a; font-weight: bold; box-shadow: 0 0 15px rgba(255,255,255,0.3); border-color: #fff; }
-        .chip-radio { display: none; }
-        .chip-radio:disabled + .chip-label { opacity: 0.5; cursor: default; }
-
-        input[type="file"] { display: none !important; }
-        .btn-upload { background: rgba(255,255,255,0.1); color: #fff; width: 100%; padding: 12px; border-radius: 12px; border: 1px dashed rgba(255,255,255,0.3); cursor: pointer; transition: 0.2s; }
-        
-        /* 다이얼로그 */
-        .dialog-card { max-width: 320px; text-align: center; }
-        .dialog-title { font-size: 18px; font-weight: 800; margin-bottom: 12px; color: #fff; }
-        .dialog-msg { font-size: 14px; color: var(--text-sub); margin-bottom: 20px; line-height: 1.5; white-space: pre-line; }
-        .dialog-input { width: 100%; height: 44px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; color: #fff; padding: 0 12px; font-size: 16px; box-sizing: border-box; text-align: center; letter-spacing: 2px; margin-bottom: 20px; outline: none; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Lab Inventory Dashboard</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
-<body>
+<body class="sidebar-open view-dashboard">
+  <div class="ambient-bg" aria-hidden="true">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+  </div>
 
-<div class="bg-container"><div class="bg-overlay"></div></div>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark" aria-hidden="true">LI</div>
+        <div class="brand-copy">
+          <strong>Lab Inventory</strong>
+          <span>공간 기반 물품 관리</span>
+        </div>
+      </div>
 
-<header>
-    <div class="header-inner">
-        <div class="header-row-top">
-            <div class="app-title">Lab Inventory</div>
-            <button class="mode-btn" id="modeBtn" onclick="toggleMode()">
-                <span id="modeText">🔒 View Only</span>
+      <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="왼쪽 메뉴 접기/펼치기">
+        <span data-icon="panel"></span>
+      </button>
+
+      <nav class="side-nav" aria-label="주요 메뉴">
+        <button class="nav-item active" type="button" data-view="dashboard" title="대시보드">
+          <span class="nav-icon" data-icon="dashboard"></span>
+          <span class="nav-label">대시보드</span>
+        </button>
+        <button class="nav-item" type="button" data-view="items" title="물품 목록">
+          <span class="nav-icon" data-icon="boxes"></span>
+          <span class="nav-label">물품 목록</span>
+        </button>
+        <button class="nav-item" type="button" data-view="map" title="공간 맵">
+          <span class="nav-icon" data-icon="map"></span>
+          <span class="nav-label">공간 맵</span>
+        </button>
+        <button class="nav-item" type="button" data-view="categories" title="분류 관리">
+          <span class="nav-icon" data-icon="tags"></span>
+          <span class="nav-label">분류</span>
+        </button>
+        <button class="nav-item" type="button" data-view="admin" title="관리자">
+          <span class="nav-icon" data-icon="shield"></span>
+          <span class="nav-label">관리자</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="auth-mini">
+          <div class="auth-avatar" id="authAvatar">G</div>
+          <div class="auth-mini-copy">
+            <strong id="authMiniTitle">로그인 필요</strong>
+            <span id="authMiniSub">Google 계정으로 편집</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div class="page-title-block">
+          <span class="eyebrow">GEH Lab Inventory</span>
+          <h1 id="pageTitle">대시보드</h1>
+        </div>
+
+        <div class="top-actions">
+          <div class="global-search">
+            <span data-icon="search"></span>
+            <input id="searchInput" type="search" placeholder="물품명, 위치, 설명, 분류 검색" autocomplete="off" />
+          </div>
+          <button class="btn ghost" id="authBtn" type="button">
+            <span data-icon="google"></span>
+            <span id="authBtnText">Google 로그인</span>
+          </button>
+          <button class="btn primary editable-only" id="addItemBtn" type="button">
+            <span data-icon="plus"></span>
+            <span>물품 등록</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="view-section active" id="dashboardView" data-view-section="dashboard">
+        <div class="hero-panel">
+          <div>
+            <span class="eyebrow">Inventory Control Center</span>
+            <h2>실험실·온실·창고 물품을 한 화면에서 관리</h2>
+            <p>왼쪽 탭으로 목록, 공간 맵, 분류 화면을 전환하고 관리자 로그인 후 물품과 공간을 등록·수정·삭제할 수 있습니다.</p>
+          </div>
+          <div class="hero-actions">
+            <button class="btn primary" type="button" data-view="map">
+              <span data-icon="map"></span>
+              <span>지도에서 보기</span>
             </button>
-        </div>
-        
-        <div class="header-main">
-            <div class="search-box">
-                <input type="text" id="search" placeholder="물품 검색..." onkeyup="render()">
-            </div>
-            <button id="addBtn" onclick="openAddModal()" class="editable-only">＋</button>
+            <button class="btn ghost" type="button" data-view="items">
+              <span data-icon="boxes"></span>
+              <span>목록 보기</span>
+            </button>
+          </div>
         </div>
 
-        <div class="filter-view-row">
-            <div class="filter-bar">
-                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">전체</button>
-                <button class="filter-btn" data-filter="greenhouse" onclick="setFilter('greenhouse')">온실</button>
-                <button class="filter-btn" data-filter="lab" onclick="setFilter('lab')">실험실</button>
-                <button class="filter-btn" data-filter="etc" onclick="setFilter('etc')">기타</button>
+        <div class="stat-grid" id="statGrid"></div>
+
+        <div class="dashboard-grid">
+          <article class="panel large-panel">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Space Map</span>
+                <h3>공간별 보관 현황</h3>
+              </div>
+              <button class="link-btn" type="button" data-view="map">전체 맵 열기</button>
             </div>
+            <div class="mini-map" id="dashboardMap"></div>
+          </article>
+
+          <article class="panel side-panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Attention</span>
+                <h3>확인 필요 물품</h3>
+              </div>
+            </div>
+            <div class="compact-list" id="attentionList"></div>
+          </article>
         </div>
+      </section>
+
+      <section class="view-section" id="itemsView" data-view-section="items">
+        <div class="content-head">
+          <div>
+            <span class="eyebrow">Inventory List</span>
+            <h2>물품 목록</h2>
+          </div>
+          <button class="btn primary editable-only" type="button" data-open-add>
+            <span data-icon="plus"></span>
+            <span>새 물품</span>
+          </button>
+        </div>
+
+        <div class="filter-panel">
+          <div class="filter-row">
+            <span class="filter-label">보관 장소</span>
+            <div class="chip-bar" id="locationFilterBar"></div>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">과제 연관성</span>
+            <div class="chip-bar" id="projectFilterBar"></div>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">분류</span>
+            <div class="chip-bar" id="categoryFilterBar"></div>
+          </div>
+        </div>
+
+        <div class="list-meta" id="listMeta"></div>
+        <div class="item-grid" id="itemGrid"></div>
+      </section>
+
+      <section class="view-section" id="mapView" data-view-section="map">
+        <div class="content-head">
+          <div>
+            <span class="eyebrow">Clickable Space Map</span>
+            <h2>공간 맵</h2>
+            <p>공간 블록을 클릭하면 해당 위치의 물품만 오른쪽 패널에 표시됩니다.</p>
+          </div>
+          <button class="btn primary editable-only" type="button" data-open-location-modal>
+            <span data-icon="plus"></span>
+            <span>공간 추가</span>
+          </button>
+        </div>
+
+        <div class="map-layout">
+          <article class="panel map-panel">
+            <div class="map-legend">
+              <span><i class="legend-dot greenhouse"></i>온실권역</span>
+              <span><i class="legend-dot lab"></i>실험실권역</span>
+              <span><i class="legend-dot common"></i>공용/기타</span>
+            </div>
+            <div class="space-map" id="spaceMap"></div>
+          </article>
+          <aside class="panel map-detail-panel" id="mapDetailPanel"></aside>
+        </div>
+      </section>
+
+      <section class="view-section" id="categoriesView" data-view-section="categories">
+        <div class="content-head">
+          <div>
+            <span class="eyebrow">Category Board</span>
+            <h2>분류 현황</h2>
+            <p>물품 등록/수정 화면에서 분류를 직접 추가하고 체크할 수 있습니다.</p>
+          </div>
+        </div>
+        <div class="category-board" id="categoryBoard"></div>
+      </section>
+
+      <section class="view-section" id="adminView" data-view-section="admin">
+        <div class="content-head">
+          <div>
+            <span class="eyebrow">Admin Console</span>
+            <h2>관리자</h2>
+            <p>관리자 계정만 물품과 공간을 등록·수정·삭제할 수 있습니다. 일반 사용자는 읽기 전용입니다.</p>
+          </div>
+          <button class="btn primary editable-only" type="button" data-open-location-modal>
+            <span data-icon="plus"></span>
+            <span>공간 추가</span>
+          </button>
+        </div>
+
+        <div class="admin-grid">
+          <article class="panel admin-status-panel" id="adminStatusPanel"></article>
+          <article class="panel location-admin-panel">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Space Management</span>
+                <h3>공간 관리</h3>
+              </div>
+            </div>
+            <div class="location-manage-list" id="locationManageList"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="itemModal" aria-hidden="true">
+    <div class="modal-card item-modal-card" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle">
+      <div class="modal-head">
+        <div>
+          <span class="eyebrow">Item Detail</span>
+          <h2 id="itemModalTitle">물품 상세</h2>
+        </div>
+        <div class="modal-head-actions">
+          <span class="readonly-badge" id="readOnlyBadge">읽기 전용</span>
+          <button class="icon-btn" type="button" data-close-modal="itemModal" aria-label="닫기">
+            <span data-icon="x"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-body item-modal-body">
+        <div class="image-editor">
+          <div class="image-frame">
+            <img id="itemImagePreview" alt="물품 사진" />
+            <div class="image-placeholder" id="itemImagePlaceholder">
+              <span data-icon="image"></span>
+              <strong>사진 없음</strong>
+            </div>
+          </div>
+          <button class="btn ghost editable-only" id="imagePickBtn" type="button">
+            <span data-icon="upload"></span>
+            <span>사진 선택</span>
+          </button>
+          <input type="file" id="itemImageInput" accept="image/*" />
+        </div>
+
+        <div class="form-grid">
+          <label class="field full">
+            <span>물품 이름</span>
+            <input id="itemNameInput" type="text" placeholder="예: pH Meter" />
+          </label>
+
+          <label class="field">
+            <span>보관 장소</span>
+            <select id="itemLocationSelect"></select>
+          </label>
+
+          <label class="field">
+            <span>세부 위치</span>
+            <input id="itemDetailLocationInput" type="text" placeholder="예: 3번 선반 / A-1" />
+          </label>
+
+          <label class="field">
+            <span>수량</span>
+            <div class="qty-control">
+              <button type="button" class="qty-btn editable-only" data-qty-delta="-1">−</button>
+              <input id="itemQtyInput" type="number" min="0" value="1" />
+              <button type="button" class="qty-btn editable-only" data-qty-delta="1">＋</button>
+            </div>
+          </label>
+
+          <div class="field">
+            <span>과제 연관성</span>
+            <div class="segmented" id="projectSegmented"></div>
+          </div>
+
+          <div class="field full">
+            <span>분류</span>
+            <div class="category-checklist" id="categoryChecklist"></div>
+            <div class="inline-add editable-only">
+              <input id="customCategoryInput" type="text" placeholder="분류 직접 추가: 예) HPLC 분석, 흡광도 분석" />
+              <button class="btn small" id="addCategoryBtn" type="button">추가</button>
+            </div>
+          </div>
+
+          <label class="field full">
+            <span>물품 상세 / 용도</span>
+            <textarea id="itemUsageInput" rows="5" placeholder="사용 목적, 보관 주의사항, 구매처 등을 입력"></textarea>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn danger editable-only" id="deleteItemBtn" type="button">삭제</button>
+        <div class="footer-spacer"></div>
+        <button class="btn ghost" type="button" data-close-modal="itemModal">닫기</button>
+        <button class="btn primary editable-only" id="saveItemBtn" type="button">저장</button>
+      </div>
     </div>
-</header>
+  </div>
 
-<div id="list"></div>
-
-<div id="editModal" class="modal-overlay" onclick="closeModal('editModal')">
-    <div class="modal-card" onclick="event.stopPropagation()">
-        <div style="font-size:20px; font-weight:800; margin-bottom:20px; text-align:center;">
-            <span>물품 상세</span>
-            <span id="readOnlyBadge" style="font-size:12px; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; margin-left:6px; color:#aaa;">읽기 전용</span>
+  <div class="modal-overlay" id="locationModal" aria-hidden="true">
+    <div class="modal-card location-modal-card" role="dialog" aria-modal="true" aria-labelledby="locationModalTitle">
+      <div class="modal-head">
+        <div>
+          <span class="eyebrow">Space Detail</span>
+          <h2 id="locationModalTitle">공간 추가</h2>
         </div>
-        
-        <div class="modal-body-flex">
-            <div class="modal-left-col-img">
-                <div class="modal-image-large-container">
-                    <img id="mThumb">
-                    <div id="mPlaceholder">사진 없음</div>
-                </div>
-                <button class="btn-upload editable-only" onclick="document.getElementById('mFileInput').click()" style="padding:10px; font-size:14px;">사진 변경</button>
-                <input type="file" id="mFileInput" accept="image/*" onchange="handleFileSelect(this, 'mThumb', 'mPlaceholder')">
-            </div>
-
-            <div class="modal-right-col-details">
-                <div class="inp-group">
-                    <label class="inp-label">이름</label>
-                    <input type="text" id="mNameInput" class="inp-full-edit" style="font-weight:bold; font-size: 18px;">
-                </div>
-
-                <div class="inp-group">
-                    <label class="inp-label">보관 장소</label>
-                    <div class="chip-group">
-                        <label><input type="radio" name="mLocType" value="greenhouse" class="chip-radio"><span class="chip-label" style="color:#10b981;">온실</span></label>
-                        <label><input type="radio" name="mLocType" value="lab" class="chip-radio"><span class="chip-label" style="color:#3b82f6;">실험실</span></label>
-                        <label><input type="radio" name="mLocType" value="etc" class="chip-radio"><span class="chip-label" style="color:#8b5cf6;">기타</span></label>
-                    </div>
-                </div>
-
-                <div class="half-row">
-                    <div class="inp-group">
-                        <label class="inp-label">수량</label>
-                        <div class="qty-control">
-                            <button class="qty-btn editable-only" onclick="changeQty(-1, 'mQty')">-</button>
-                            <input type="number" id="mQty" class="qty-val" value="0" readonly>
-                            <button class="qty-btn editable-only" onclick="changeQty(1, 'mQty')">+</button>
-                        </div>
-                    </div>
-                    <div class="inp-group">
-                        <label class="inp-label">세부 위치</label>
-                        <input type="text" id="mLocInput" class="inp-full-edit" placeholder="예: 3번 선반">
-                    </div>
-                </div>
-
-                <div class="inp-group">
-                    <label class="inp-label">분류</label>
-                    <div class="chip-group">
-                        <label><input type="radio" name="mCat" value="장비" class="chip-radio"><span class="chip-label">장비</span></label>
-                        <label><input type="radio" name="mCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
-                    </div>
-                </div>
-
-                <div class="inp-group" style="flex:1; display: flex; flex-direction: column;">
-                    <label class="inp-label">설명</label>
-                    <textarea id="mUsageInput" class="inp-full-edit" style="flex: 1; min-height: 100px; resize: none; font-family: inherit;"></textarea>
-                </div>
-            </div>
+        <button class="icon-btn" type="button" data-close-modal="locationModal" aria-label="닫기">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <label class="field">
+            <span>공간 이름</span>
+            <input id="locationNameInput" type="text" placeholder="예: 배양실 / 시료보관실" />
+          </label>
+          <label class="field">
+            <span>권역</span>
+            <input id="locationGroupInput" type="text" placeholder="예: 실험실권역 / 온실권역" list="locationGroupSuggestions" />
+            <datalist id="locationGroupSuggestions">
+              <option value="온실권역"></option>
+              <option value="실험실권역"></option>
+              <option value="공용/관리"></option>
+              <option value="외부/협력"></option>
+              <option value="건물"></option>
+              <option value="기타"></option>
+            </datalist>
+          </label>
+          <label class="field">
+            <span>지도 색상 그룹</span>
+            <select id="locationTypeSelect">
+              <option value="greenhouse">온실권역</option>
+              <option value="lab">실험실권역</option>
+              <option value="common">공용/기타</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>아이콘</span>
+            <select id="locationIconSelect">
+              <option value="warehouse">창고</option>
+              <option value="sprout">온실/식물</option>
+              <option value="desk">사무실</option>
+              <option value="archive">보관 박스</option>
+              <option value="flask">실험실</option>
+              <option value="microscope">공동기기</option>
+              <option value="building">건물</option>
+              <option value="stairs">층/계단</option>
+              <option value="location">위치</option>
+              <option value="more">기타</option>
+            </select>
+          </label>
+          <label class="field full">
+            <span>설명</span>
+            <textarea id="locationDescInput" rows="4" placeholder="지도와 상세 패널에 표시될 공간 설명"></textarea>
+          </label>
         </div>
-
-        <div class="btn-row">
-            <button class="btn btn-cancel" onclick="closeModal('editModal')">닫기</button>
-            <button class="btn btn-del editable-only" onclick="askDelete()">삭제</button>
-            <button class="btn btn-save editable-only" onclick="saveItem()">저장</button>
-        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" type="button" data-close-modal="locationModal">닫기</button>
+        <div class="footer-spacer"></div>
+        <button class="btn primary" id="saveLocationBtn" type="button">저장</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<div id="addModal" class="modal-overlay" onclick="closeModal('addModal')">
-    <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div style="font-size:20px; font-weight:800; text-align:center; margin-bottom:20px;">새 물품 등록</div>
-        <div style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="inp-group">
-                <label class="inp-label">보관 장소 (어디에 두나요?)</label>
-                <div class="chip-group">
-                    <label><input type="radio" name="newLocType" value="greenhouse" class="chip-radio" checked><span class="chip-label" style="color:#10b981;">온실</span></label>
-                    <label><input type="radio" name="newLocType" value="lab" class="chip-radio"><span class="chip-label" style="color:#3b82f6;">실험실</span></label>
-                    <label><input type="radio" name="newLocType" value="etc" class="chip-radio"><span class="chip-label" style="color:#8b5cf6;">기타</span></label>
-                </div>
-            </div>
-
-            <div class="inp-group">
-                <label class="inp-label">물품 이름</label>
-                <input type="text" id="newName" class="inp-field" placeholder="예: PH Meter">
-            </div>
-
-            <div class="half-row">
-                <div class="inp-group">
-                    <label class="inp-label">수량</label>
-                    <div class="qty-control">
-                        <button class="qty-btn" onclick="changeQty(-1, 'newQty')">-</button>
-                        <input type="number" id="newQty" class="qty-val" value="1" readonly>
-                        <button class="qty-btn" onclick="changeQty(1, 'newQty')">+</button>
-                    </div>
-                </div>
-                <div class="inp-group">
-                    <label class="inp-label">세부 위치</label>
-                    <input type="text" id="newLoc" class="inp-field" placeholder="예: A-1 선반">
-                </div>
-            </div>
-
-            <div class="inp-group">
-                <label class="inp-label">분류</label>
-                <div class="chip-group">
-                    <label><input type="radio" name="newCat" value="장비" class="chip-radio" checked><span class="chip-label">장비</span></label>
-                    <label><input type="radio" name="newCat" value="소모품" class="chip-radio"><span class="chip-label">소모품</span></label>
-                </div>
-            </div>
-
-            <div class="inp-group">
-                <label class="inp-label">용도 / 설명</label>
-                <input type="text" id="newUsage" class="inp-field" placeholder="간단한 설명 입력">
-            </div>
-
-            <div class="inp-group">
-                <label class="inp-label">사진 등록</label>
-                <button class="btn-upload" onclick="document.getElementById('newFileInput').click()">사진 선택 (자동 압축)</button>
-                <input type="file" id="newFileInput" accept="image/*" onchange="handleFileSelect(this, 'previewNew', 'previewLabel')">
-                <div style="margin-top:10px; text-align:center;">
-                    <img id="previewNew" style="width:100%; height:150px; border-radius:12px; object-fit:cover; display:none; border:1px solid rgba(255,255,255,0.2);">
-                </div>
-            </div>
-        </div>
-        <div class="btn-row">
-            <button class="btn btn-cancel" onclick="closeModal('addModal')">취소</button>
-            <button class="btn btn-save" onclick="createItem()">등록</button>
-        </div>
+  <div class="modal-overlay" id="dialogModal" aria-hidden="true">
+    <div class="modal-card dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h2 id="dialogTitle">알림</h2>
+      <p id="dialogMessage">메시지</p>
+      <div class="dialog-actions">
+        <button class="btn ghost" id="dialogCancelBtn" type="button">취소</button>
+        <button class="btn primary" id="dialogOkBtn" type="button">확인</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<div id="dialogModal" class="modal-overlay" style="z-index: 300;">
-    <div class="modal-card dialog-card" onclick="event.stopPropagation()">
-        <div id="dialogTitle" class="dialog-title">알림</div>
-        <div id="dialogMsg" class="dialog-msg">메시지</div>
-        
-        <input type="password" id="dialogInput" class="dialog-input" style="display:none;" placeholder="입력하세요">
-        <div class="btn-row" style="margin-top:10px; flex-direction:column;">
-            <button id="dialogCancelBtn" class="btn btn-cancel">취소</button>
-            <button id="dialogOkBtn" class="btn btn-save">확인</button>
-        </div>
-    </div>
-</div>
-
-<script type="module">
-    // =========================================================================
-    // 1. 설정 (내 정보 & 게스트 정보)
-    // =========================================================================
-    const ADMIN_EMAIL = "envlab1315@gmail.com";  // 사장님 구글 이메일
-    
-    // 게스트용 계정 (Firebase 콘솔에 만들어둔 것)
-    const GUEST_EMAIL = "guest@lab.com";
-    const GUEST_PW_REAL = "guest1234"; 
-    
-    // ⭐ 사용자가 입력할 게스트 비밀번호 (이것만 바꾸면 됩니다)
-    const GUEST_PIN_INPUT = "1234"; 
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyCzMpS-PnOPEnCL6Fqk8VteNzHMrpXMmS8",
-        authDomain: "lab-inventory-b7a6b.firebaseapp.com",
-        databaseURL: "https://lab-inventory-b7a6b-default-rtdb.firebaseio.com",
-        projectId: "lab-inventory-b7a6b",
-        storageBucket: "lab-inventory-b7a6b.firebasestorage.app",
-        messagingSenderId: "218879100576",
-        appId: "1:218879100576:web:74e6b66f3400cc5c286bc5"
-    };
-
-    // =========================================================================
-    // 2. 라이브러리 및 초기화
-    // =========================================================================
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-    import { getAuth, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const auth = getAuth(app);
-    const googleProvider = new GoogleAuthProvider();
-
-    let localDB = {}; 
-    let selectedId = null; 
-    let selectedCategory = null; 
-    let tempImgData = null; 
-    let currentFilter = 'all';
-    
-    let userMode = 'viewer'; 
-    let guestTimer = null; 
-
-    // =========================================================================
-    // 3. 키보드 이벤트 리스너 (엔터/ESC) - ⭐ 추가된 핵심 기능!
-    // =========================================================================
-    document.addEventListener('keydown', function(event) {
-        const modal = document.getElementById('dialogModal');
-        // 모달이 떠있을 때만 작동
-        if (modal.style.display === 'flex') {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // 기본 동작 방지
-                document.getElementById('dialogOkBtn').click();
-            } else if (event.key === 'Escape') {
-                // 취소 버튼이 있으면 취소, 없으면 확인 버튼(닫기) 클릭
-                if(document.getElementById('dialogCancelBtn').style.display === 'none'){
-                    document.getElementById('dialogOkBtn').click();
-                } else {
-                    document.getElementById('dialogCancelBtn').click();
-                }
-            }
-        }
-    });
-
-    // =========================================================================
-    // 4. 로그인 상태 감지 (자동 처리)
-    // =========================================================================
-    onAuthStateChanged(auth, (user) => {
-        if(guestTimer) { clearInterval(guestTimer); guestTimer = null; }
-
-        if (user) {
-            if (user.email === ADMIN_EMAIL) {
-                // 관리자
-                userMode = 'admin';
-                document.body.classList.add('admin-mode');
-                document.body.classList.remove('guest-mode');
-                document.getElementById('modeText').innerText = '🔓 관리자 모드';
-            } else if (user.email === GUEST_EMAIL) {
-                // 게스트
-                userMode = 'guest';
-                document.body.classList.add('guest-mode');
-                document.body.classList.remove('admin-mode');
-                startGuestTimer(600); // 10분
-            } else {
-                alert("권한이 없는 사용자입니다.");
-                signOut(auth);
-                return;
-            }
-        } else {
-            // 비로그인
-            userMode = 'viewer';
-            document.body.classList.remove('admin-mode', 'guest-mode');
-            document.getElementById('modeText').innerText = '🔒 View Only';
-        }
-        updateUI();
-    });
-
-    function startGuestTimer(seconds) {
-        let remaining = seconds;
-        updateTimerDisplay(remaining);
-        guestTimer = setInterval(() => {
-            remaining--;
-            if (remaining <= 0) {
-                clearInterval(guestTimer);
-                // ⭐ 기본 alert 대신 예쁜 모달창 사용
-                signOut(auth).then(() => showDialog('alert', '⏳ 세션 만료', '게스트 사용 시간(10분)이 끝났습니다.\n읽기 모드로 전환됩니다.'));
-            } else {
-                updateTimerDisplay(remaining);
-            }
-        }, 1000);
-    }
-    
-    function updateTimerDisplay(sec) {
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        document.getElementById('modeText').innerText = `⏳ 게스트 ${m}:${String(s).padStart(2,'0')}`;
-    }
-
-    // =========================================================================
-    // 5. 로그인 팝업 (관리자 구글 vs 게스트 1234)
-    // =========================================================================
-    window.toggleMode = () => {
-        if (userMode !== 'viewer') {
-            // ⭐ 로그아웃도 예쁜 모달창 사용
-            showDialog('confirm', '로그아웃', '정말 로그아웃 하시겠습니까?', (res) => {
-                if(res) signOut(auth);
-            });
-            return;
-        }
-        showLoginOptions();
-    };
-
-    function showLoginOptions() {
-        const modal = document.getElementById('dialogModal');
-        const title = document.getElementById('dialogTitle');
-        const msg = document.getElementById('dialogMsg');
-        const btnRow = modal.querySelector('.btn-row');
-        // 기존 input 숨기기
-        document.getElementById('dialogInput').style.display = 'none';
-
-        title.innerText = "로그인";
-        msg.innerHTML = "관리자 또는 게스트로 접속하세요.";
-        
-        // 팝업 내용 커스텀 (구글 버튼 + 비밀번호 입력창)
-        const oldHtml = btnRow.innerHTML;
-        btnRow.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:16px; width:100%;">
-                
-                <button class="btn btn-save" style="background:#4285F4; width:100%; height:48px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="loginGoogle()">
-                    <span style="font-weight:800; font-size:15px;"></span> 관리자 로그인
-                </button>
-                
-                <div style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:center; line-height:0.1em; margin: 4px 0; color:#aaa;">
-                    <span style="background:#1e293b; padding:0 10px; font-size:12px;">OR</span>
-                </div>
-
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <input type="password" id="guestPinInput" placeholder="게스트 비번" 
-                        style="width:150px; flex:none; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:10px; padding:0 12px; color:#fff; height:48px; text-align:center; font-size:16px; box-sizing:border-box;">
-                    
-                    <button class="btn btn-save" style="background:#F59E0B; flex:1; height:48px; padding:0; display:flex; align-items:center; justify-content:center; box-sizing:border-box; white-space:nowrap;" onclick="checkGuestPin()">접속하기</button>
-                </div>
-
-                <button class="btn btn-cancel" style="width:100%; height:44px;" onclick="closeLoginDialog()">취소</button>
-            </div>
-        `;
-
-        modal.style.display = 'flex';
-        
-        // 게스트 비번창에 포커스 & 엔터키 처리
-        setTimeout(() => {
-            const pinInput = document.getElementById('guestPinInput');
-            if(pinInput) {
-                pinInput.focus();
-                pinInput.onkeyup = (e) => { if(e.key === 'Enter') checkGuestPin(); };
-            }
-        }, 100);
-
-        // 헬퍼 함수들
-        window.closeLoginDialog = () => {
-            modal.style.display = 'none';
-            btnRow.innerHTML = oldHtml; 
-        };
-
-        window.loginGoogle = () => {
-            window.closeLoginDialog();
-            signInWithPopup(auth, googleProvider).catch(err => alert("로그인 실패: " + err.message));
-        };
-
-        window.checkGuestPin = () => {
-            const inputVal = document.getElementById('guestPinInput').value;
-            if (inputVal === GUEST_PIN_INPUT) {
-                // 1234 맞으면 -> 코드가 알아서 로그인 처리
-                window.closeLoginDialog();
-                signInWithEmailAndPassword(auth, GUEST_EMAIL, GUEST_PW_REAL)
-                    .then(() => showDialog('alert', '접속 성공', '게스트 모드로 접속합니다. (10분)'))
-                    .catch(err => alert("게스트 설정 오류: " + err.message));
-            } else {
-                // ⭐ 비밀번호 오류도 예쁜 모달창 사용 + 확인 누르면 다시 로그인창으로 복귀
-                showDialog('alert', '⛔ 비밀번호 오류', '비밀번호가 틀렸습니다.\n다시 확인해주세요.', () => {
-                    // 확인 누르면 다시 로그인 창을 띄움
-                    showLoginOptions();
-                });
-                // 입력값 비우기는 의미 없으므로(창이 닫혔다가 다시 열리니까) 생략해도 되지만 유지
-                // document.getElementById('guestPinInput').value = ''; 
-            }
-        };
-    }
-
-    // =========================================================================
-    // 6. 기타 필수 함수 (UI, CRUD) - 기존과 동일
-    // =========================================================================
-    function updateUI() {
-        const isEditable = (userMode === 'admin' || userMode === 'guest');
-        const addBtn = document.getElementById('addBtn');
-        if(addBtn) addBtn.style.display = isEditable ? 'flex' : 'none';
-        document.querySelectorAll('.editable-only').forEach(el => {
-            if(el.classList.contains('qty-btn')) el.style.display = isEditable ? 'flex' : 'none';
-            else el.style.display = isEditable ? 'inline-block' : 'none';
-        });
-        document.querySelectorAll('#editModal input, #editModal textarea, #editModal button.qty-btn').forEach(el => {
-            if(!el.classList.contains('btn-cancel')) el.disabled = !isEditable;
-        });
-    }
-
-    window.setFilter = (filterType) => {
-        currentFilter = filterType;
-        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === filterType));
-        render(); 
-    };
-
-    const dbRef = ref(db, 'inventory');
-    onValue(dbRef, (snapshot) => {
-        const data = snapshot.val();
-        localDB = data || { greenhouse: {}, lab: {}, etc: {} };
-        render(); 
-    });
-
-    window.render = () => {
-        const listEl = document.getElementById('list');
-        listEl.innerHTML = '';
-        const query = document.getElementById('search').value.toLowerCase();
-        let allItems = [];
-        ['greenhouse', 'lab', 'etc'].forEach(cat => {
-            const catData = localDB[cat] || {};
-            Object.entries(catData).forEach(([key, val]) => { allItems.push({ id: key, ...val, sourceCategory: cat }); });
-        });
-        const filtered = allItems.filter(item => {
-            if (currentFilter !== 'all' && item.sourceCategory !== currentFilter) return false;
-            if (!query) return true;
-            return item.name.toLowerCase().includes(query) || (item.usage && item.usage.toLowerCase().includes(query)) || (item.loc && item.loc.toLowerCase().includes(query));
-        });
-        filtered.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-        if (filtered.length === 0) {
-            listEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#cbd5e1; margin-top:60px;">데이터가 없습니다.</div>';
-            return;
-        }
-        filtered.forEach(item => {
-            const div = document.createElement('div');
-            let themeClass = item.sourceCategory === 'greenhouse' ? 'theme-greenhouse' : (item.sourceCategory === 'lab' ? 'theme-lab' : 'theme-etc');
-            let locName = item.sourceCategory === 'greenhouse' ? '온실' : (item.sourceCategory === 'lab' ? '실험실' : '기타');
-            div.className = `item ${themeClass}`; 
-            div.onclick = () => openEditModal(item);
-            let imageContent = item.img ? `<img class="card-img" src="${item.img}">` : `<div class="card-placeholder" style="background:${getColor(item.name)}">${item.name.charAt(0)}</div>`;
-            let catBadgeClass = (item.cat === '장비') ? 'cat-pill equip' : 'cat-pill consumable';
-            div.innerHTML = `
-                <div class="card-img-wrapper">
-                    ${imageContent}<div class="img-overlay-gradient"></div>
-                    <span class="loc-badge-corner">${locName}</span>
-                    <div class="overlay-text-group"><div class="item-name-overlay">${item.name}</div></div>
-                </div>
-                <div class="item-content-detailed">
-                    <div class="info-row-top"><span class="detail-loc">📍 ${item.loc || '미지정'}</span><span class="detail-qty">${item.qty}개</span></div>
-                    <div class="info-row-bottom"><span class="${catBadgeClass}">${item.cat || '미분류'}</span><span class="separator">|</span><span class="item-desc-text">${item.usage || '설명 없음'}</span></div>
-                </div>`;
-            listEl.appendChild(div);
-        });
-    };
-
-    window.createItem = () => {
-        if(userMode === 'viewer') return alert("권한이 없습니다.");
-        const name = document.getElementById('newName').value.trim();
-        if (!name) return alert('이름을 입력해주세요.');
-        const targetLoc = document.querySelector('input[name="newLocType"]:checked').value;
-        const newId = Date.now().toString(); 
-        const newItem = {
-            name: name, qty: parseInt(document.getElementById('newQty').value) || 0,
-            loc: document.getElementById('newLoc').value, usage: document.getElementById('newUsage').value,
-            cat: document.querySelector('input[name="newCat"]:checked').value, img: tempImgData 
-        };
-        set(ref(db, `inventory/${targetLoc}/${newId}`), newItem).then(() => closeModal('addModal')).catch(err => alert("저장 실패: " + err.message));
-    };
-
-    window.saveItem = () => {
-        if(userMode === 'viewer') return alert("권한이 없습니다.");
-        if (!selectedId || !selectedCategory) return;
-        const newLocType = document.querySelector('input[name="mLocType"]:checked').value;
-        const updatedItem = {
-            name: document.getElementById('mNameInput').value, qty: parseInt(document.getElementById('mQty').value),
-            loc: document.getElementById('mLocInput').value, usage: document.getElementById('mUsageInput').value,
-            cat: document.querySelector('input[name="mCat"]:checked').value, img: tempImgData 
-        };
-        if (newLocType !== selectedCategory) {
-            remove(ref(db, `inventory/${selectedCategory}/${selectedId}`))
-                .then(() => set(ref(db, `inventory/${newLocType}/${selectedId}`), updatedItem))
-                .then(() => closeModal('editModal')).catch(err => alert("오류: " + err.message));
-        } else {
-            set(ref(db, `inventory/${selectedCategory}/${selectedId}`), updatedItem)
-                .then(() => closeModal('editModal')).catch(err => alert("오류: " + err.message));
-        }
-    };
-
-    window.askDelete = () => {
-        if(userMode === 'viewer') return alert("삭제 권한이 없습니다.");
-        // 삭제도 예쁜 모달로 변경
-        showDialog('confirm', '삭제 확인', '정말 이 물품을 삭제하시겠습니까?', (res) => {
-            if(res) {
-                 remove(ref(db, `inventory/${selectedCategory}/${selectedId}`)).then(() => closeModal('editModal')).catch(err => alert("삭제 실패: " + err.message));
-            }
-        });
-    };
-
-    window.handleFileSelect = (input, imgId, phId) => {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas'); const MAX_SIZE = 800; 
-                    let w = img.width, h = img.height;
-                    if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    tempImgData = canvas.toDataURL('image/jpeg', 0.8);
-                    document.getElementById(imgId).src = tempImgData; 
-                    document.getElementById(imgId).style.display = 'block';
-                    if(document.getElementById(phId)) document.getElementById(phId).style.display = 'none';
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(input.files[0]);
-        }
-    };
-
-    window.openAddModal = () => {
-        if(userMode === 'viewer') return alert("권한이 없습니다.");
-        document.getElementById('newName').value = ''; document.getElementById('newQty').value = 1;
-        document.getElementById('newLoc').value = ''; document.getElementById('newUsage').value = '';
-        tempImgData = null; document.getElementById('previewNew').style.display = 'none';
-        document.getElementById('addModal').style.display = 'flex';
-    };
-
-    window.openEditModal = (item) => {
-        if(!item) return; selectedId = item.id; selectedCategory = item.sourceCategory; tempImgData = item.img || null;
-        document.getElementById('mNameInput').value = item.name; document.getElementById('mLocInput').value = item.loc || '';
-        document.getElementById('mUsageInput').value = item.usage || ''; document.getElementById('mQty').value = item.qty;
-        document.getElementsByName('mCat').forEach(r => r.checked = (r.value === item.cat));
-        document.getElementsByName('mLocType').forEach(r => r.checked = (r.value === item.sourceCategory));
-        const imgEl = document.getElementById('mThumb'); const phEl = document.getElementById('mPlaceholder');
-        if (item.img) { imgEl.src = item.img; imgEl.style.display = 'block'; phEl.style.display = 'none'; } 
-        else { imgEl.style.display = 'none'; phEl.style.display = 'flex'; }
-        updateUI(); document.getElementById('editModal').style.display = 'flex';
-    };
-
-    window.closeModal = (id) => document.getElementById(id).style.display = 'none';
-    window.changeQty = (delta, targetId) => {
-        const id = targetId || 'mQty'; const el = document.getElementById(id);
-        if(el) el.value = Math.max(0, parseInt(el.value) + delta);
-    };
-    function getColor(str) {
-        const colors = [ 'linear-gradient(135deg, #3b82f6, #2563eb)', 'linear-gradient(135deg, #10b981, #059669)', 'linear-gradient(135deg, #8b5cf6, #7c3aed)', 'linear-gradient(135deg, #f59e0b, #d97706)', 'linear-gradient(135deg, #ec4899, #db2777)' ];
-        let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-        return colors[Math.abs(hash) % colors.length];
-    }
-
-    // 기본 다이얼로그 기능 (alert/confirm 대용) - 로그인창이 덮어쓰지 않도록 보존
-    window.showDialog = (type, title, msg, callback) => {
-        const modal = document.getElementById('dialogModal');
-        document.getElementById('dialogTitle').innerText = title;
-        document.getElementById('dialogMsg').innerText = msg;
-        const btnRow = modal.querySelector('.btn-row');
-        // 버튼 UI 복구
-        btnRow.innerHTML = `
-            <button id="dialogCancelBtn" class="btn btn-cancel">취소</button>
-            <button id="dialogOkBtn" class="btn btn-save">확인</button>
-        `;
-        document.getElementById('dialogInput').style.display = (type === 'prompt') ? 'block' : 'none';
-        
-        document.getElementById('dialogCancelBtn').style.display = (type === 'alert') ? 'none' : 'block';
-        document.getElementById('dialogOkBtn').onclick = () => { modal.style.display = 'none'; if(callback) callback(true); };
-        document.getElementById('dialogCancelBtn').onclick = () => { modal.style.display = 'none'; if(callback && type==='confirm') callback(false); };
-        modal.style.display = 'flex';
-    };
-
-    updateUI();
-</script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
