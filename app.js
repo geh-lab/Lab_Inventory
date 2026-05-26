@@ -43,16 +43,18 @@ const state = {
   locationFilter: "all",
   projectFilter: "all",
   categoryFilter: "all",
-  selectedMapLocation: "greenhouse-storage"
+  selectedMapLocation: "greenhouse-storage",
+  theme: localStorage.getItem("labInventoryTheme") || "dark"
 };
 
 let inventoryRaw = {};
-let settingsRaw = { locations: {}, hiddenLocations: {} };
+let settingsRaw = { locations: {}, hiddenLocations: {}, categories: {}, hiddenCategories: {} };
 let customCategories = new Set(DEFAULT_CATEGORIES);
 let currentUser = null;
 let editingItem = null;
 let editingLocationId = null;
 let tempImageData = null;
+let tempLocationImageData = null;
 let dialogResolver = null;
 
 const app = initializeApp(firebaseConfig);
@@ -64,6 +66,8 @@ provider.setCustomParameters({ prompt: "select_account" });
 const els = {
   sidebarToggle: document.getElementById("sidebarToggle"),
   searchInput: document.getElementById("searchInput"),
+  themeToggle: document.getElementById("themeToggle"),
+  themeToggleText: document.getElementById("themeToggleText"),
   authBtn: document.getElementById("authBtn"),
   authBtnText: document.getElementById("authBtnText"),
   authAvatar: document.getElementById("authAvatar"),
@@ -97,7 +101,9 @@ const els = {
   itemImagePreview: document.getElementById("itemImagePreview"),
   itemImagePlaceholder: document.getElementById("itemImagePlaceholder"),
   itemImageInput: document.getElementById("itemImageInput"),
+  itemImageUrlInput: document.getElementById("itemImageUrlInput"),
   imagePickBtn: document.getElementById("imagePickBtn"),
+  removeItemImageBtn: document.getElementById("removeItemImageBtn"),
   saveItemBtn: document.getElementById("saveItemBtn"),
   deleteItemBtn: document.getElementById("deleteItemBtn"),
   readOnlyBadge: document.getElementById("readOnlyBadge"),
@@ -108,6 +114,12 @@ const els = {
   locationTypeSelect: document.getElementById("locationTypeSelect"),
   locationIconSelect: document.getElementById("locationIconSelect"),
   locationDescInput: document.getElementById("locationDescInput"),
+  locationImagePreview: document.getElementById("locationImagePreview"),
+  locationImagePlaceholder: document.getElementById("locationImagePlaceholder"),
+  locationImageInput: document.getElementById("locationImageInput"),
+  locationImageUrlInput: document.getElementById("locationImageUrlInput"),
+  locationImagePickBtn: document.getElementById("locationImagePickBtn"),
+  removeLocationImageBtn: document.getElementById("removeLocationImageBtn"),
   saveLocationBtn: document.getElementById("saveLocationBtn"),
   dialogModal: document.getElementById("dialogModal"),
   dialogTitle: document.getElementById("dialogTitle"),
@@ -125,6 +137,9 @@ const SVG = {
   search: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.2-3.2'/></svg>",
   google: "<svg viewBox='0 0 24 24' fill='currentColor'><path d='M21.6 12.23c0-.74-.07-1.45-.19-2.13H12v4.03h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.43Z'/><path d='M12 22c2.7 0 4.96-.89 6.62-2.42l-3.24-2.51c-.9.6-2.04.95-3.38.95-2.6 0-4.81-1.76-5.6-4.12H3.06v2.6A10 10 0 0 0 12 22Z'/><path d='M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.06a10 10 0 0 0 0 9l3.34-2.6Z'/><path d='M12 5.98c1.47 0 2.78.5 3.81 1.49l2.87-2.87C16.96 2.99 14.7 2 12 2A10 10 0 0 0 3.06 7.5l3.34 2.6C7.19 7.74 9.4 5.98 12 5.98Z'/></svg>",
   plus: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4'><path d='M12 5v14M5 12h14'/></svg>",
+  sun: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'/></svg>",
+  moon: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z'/></svg>",
+  trash: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M6 6l1 18h10l1-18'/><path d='M10 11v6M14 11v6'/></svg>",
   warehouse: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 10 12 4l9 6'/><path d='M5 10v10h14V10'/><path d='M9 20v-6h6v6'/><path d='M9 10h6'/></svg>",
   sprout: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M12 20V10'/><path d='M12 10C8 10 5 7 5 3c4 0 7 3 7 7Z'/><path d='M12 12c4 0 7-3 7-7-4 0-7 3-7 7Z'/></svg>",
   desk: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M4 8h16v5H4z'/><path d='M6 13v7M18 13v7M10 13v7M14 13v7'/><path d='M8 4h8v4H8z'/></svg>",
@@ -149,6 +164,7 @@ const SVG = {
 };
 
 function init() {
+  applyTheme();
   hydrateIcons();
   populateLocationSelect();
   bindEvents();
@@ -168,6 +184,7 @@ function hydrateIcons(root = document) {
 
 function bindEvents() {
   els.sidebarToggle.addEventListener("click", toggleSidebar);
+  els.themeToggle.addEventListener("click", toggleTheme);
   els.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
     renderAll();
@@ -176,7 +193,15 @@ function bindEvents() {
   document.getElementById("addItemBtn").addEventListener("click", () => openItemModal());
   document.querySelectorAll("[data-open-add]").forEach((btn) => btn.addEventListener("click", () => openItemModal()));
   els.imagePickBtn.addEventListener("click", () => els.itemImageInput.click());
+  els.removeItemImageBtn.addEventListener("click", clearItemImage);
   els.itemImageInput.addEventListener("change", handleImageSelect);
+  els.itemImageUrlInput.addEventListener("change", handleItemImageUrlChange);
+  els.itemImageUrlInput.addEventListener("blur", handleItemImageUrlChange);
+  els.locationImagePickBtn.addEventListener("click", () => els.locationImageInput.click());
+  els.removeLocationImageBtn.addEventListener("click", clearLocationImage);
+  els.locationImageInput.addEventListener("change", handleLocationImageSelect);
+  els.locationImageUrlInput.addEventListener("change", handleLocationImageUrlChange);
+  els.locationImageUrlInput.addEventListener("blur", handleLocationImageUrlChange);
   els.addCategoryBtn.addEventListener("click", addCategoryFromInput);
   els.categoryChecklist.addEventListener("change", handleCategoryToggle);
   els.saveLocationBtn.addEventListener("click", saveLocation);
@@ -245,6 +270,15 @@ function bindEvents() {
     const deleteLocationBtn = event.target.closest("[data-delete-location]");
     if (deleteLocationBtn) deleteLocation(deleteLocationBtn.dataset.deleteLocation);
 
+    const saveCategoryBtn = event.target.closest("[data-save-category]");
+    if (saveCategoryBtn) saveCategoryFromBoard();
+
+    const deleteCategoryBtn = event.target.closest("[data-delete-category]");
+    if (deleteCategoryBtn) deleteCategory(deleteCategoryBtn.dataset.deleteCategory);
+
+    const restoreCategoryBtn = event.target.closest("[data-restore-category]");
+    if (restoreCategoryBtn) restoreCategory(restoreCategoryBtn.dataset.restoreCategory);
+
     const restoreLocationBtn = event.target.closest("[data-restore-location]");
     if (restoreLocationBtn) restoreLocation(restoreLocationBtn.dataset.restoreLocation);
 
@@ -256,6 +290,11 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && event.target?.id === "categoryAdminInput") {
+      event.preventDefault();
+      saveCategoryFromBoard();
+      return;
+    }
     if (event.key === "Escape") {
       if (els.dialogModal.classList.contains("open")) closeDialog(false);
       else if (els.locationModal.classList.contains("open")) closeModal("locationModal");
@@ -278,6 +317,25 @@ function restoreSidebarState() {
   const isCollapsed = localStorage.getItem("labInventorySidebarCollapsed") === "1";
   document.body.classList.toggle("sidebar-collapsed", isCollapsed);
   document.body.classList.toggle("sidebar-open", !isCollapsed);
+}
+
+function applyTheme() {
+  const theme = state.theme === "light" ? "light" : "dark";
+  state.theme = theme;
+  document.body.classList.toggle("theme-light", theme === "light");
+  document.body.classList.toggle("theme-dark", theme !== "light");
+  document.documentElement.style.colorScheme = theme;
+  if (els.themeToggle) {
+    els.themeToggle.querySelector("[data-icon]").innerHTML = icon(theme === "light" ? "sun" : "moon");
+    els.themeToggleText.textContent = theme === "light" ? "라이트" : "다크";
+    els.themeToggle.title = theme === "light" ? "다크 모드로 전환" : "라이트 모드로 전환";
+  }
+}
+
+function toggleTheme() {
+  state.theme = state.theme === "light" ? "dark" : "light";
+  localStorage.setItem("labInventoryTheme", state.theme);
+  applyTheme();
 }
 
 function watchAuth() {
@@ -307,8 +365,11 @@ function watchSettings() {
     const value = snapshot.val() || {};
     settingsRaw = {
       locations: value.locations || {},
-      hiddenLocations: value.hiddenLocations || {}
+      hiddenLocations: value.hiddenLocations || {},
+      categories: value.categories || {},
+      hiddenCategories: value.hiddenCategories || {}
     };
+    rebuildCategorySet();
     renderAll();
   }, (error) => {
     showDialog("설정 읽기 오류", `Firebase에서 공간 설정을 불러오지 못했습니다.
@@ -378,6 +439,7 @@ function setView(view) {
 }
 
 function renderAll() {
+  populateLocationSelect();
   renderFilters();
   renderDashboard();
   renderItems();
@@ -486,7 +548,68 @@ function normalizeProject(project) {
 
 function rebuildCategorySet() {
   customCategories = new Set(DEFAULT_CATEGORIES);
+  Object.values(settingsRaw.categories || {}).forEach((category) => {
+    const label = normalizeCategoryName(category?.label || category?.name || category);
+    if (label) customCategories.add(label);
+  });
   getItems().forEach((item) => item.categories.forEach((category) => customCategories.add(category)));
+}
+
+function getCategoryKey(label) {
+  return normalizeLocationKey(label) || "category-none";
+}
+
+function isDefaultCategory(label) {
+  return DEFAULT_CATEGORIES.includes(label);
+}
+
+function getHiddenCategoryKeys() {
+  return new Set(Object.entries(settingsRaw.hiddenCategories || {})
+    .filter(([, value]) => Boolean(value))
+    .map(([id]) => id));
+}
+
+function isCategoryHidden(label) {
+  return getHiddenCategoryKeys().has(getCategoryKey(label));
+}
+
+function getCategoryCounts(items = getItems()) {
+  const counts = new Map();
+  items.forEach((item) => item.categories.forEach((category) => counts.set(category, (counts.get(category) || 0) + 1)));
+  return counts;
+}
+
+function getCategoryRecords() {
+  const counts = getCategoryCounts();
+  const labels = new Set(DEFAULT_CATEGORIES);
+  Object.values(settingsRaw.categories || {}).forEach((category) => {
+    const label = normalizeCategoryName(category?.label || category?.name || category);
+    if (label) labels.add(label);
+  });
+  counts.forEach((_, label) => labels.add(label));
+  return [...labels].map((label) => ({
+    id: getCategoryKey(label),
+    label,
+    count: counts.get(label) || 0,
+    builtIn: isDefaultCategory(label),
+    hidden: isCategoryHidden(label),
+    fromItems: counts.has(label)
+  })).sort((a, b) => {
+    if (a.hidden !== b.hidden) return a.hidden ? 1 : -1;
+    return b.count - a.count || a.label.localeCompare(b.label, "ko");
+  });
+}
+
+function getActiveCategoryLabels(options = {}) {
+  const { includeZero = true, includeHiddenSelected = "" } = options;
+  const selected = normalizeCategoryName(includeHiddenSelected);
+  return getCategoryRecords()
+    .filter((record) => {
+      if (record.hidden && record.label !== selected) return false;
+      if (!includeZero && record.count === 0 && record.label !== selected) return false;
+      return true;
+    })
+    .map((record) => record.label);
 }
 
 function getHiddenLocationIds() {
@@ -510,7 +633,8 @@ function normalizeLocationRecord(id, raw = {}, fallback = {}) {
     group: raw.group || fallback.group || "사용자 추가",
     type,
     icon: iconName,
-    desc: raw.desc || fallback.desc || "사용자 추가 보관 공간"
+    desc: raw.desc || fallback.desc || "사용자 추가 보관 공간",
+    image: raw.image || raw.img || fallback.image || fallback.img || null
   };
 }
 
@@ -615,12 +739,16 @@ function getFilteredItems() {
 function renderFilters() {
   const items = getItems();
   const locationCounts = countBy(items, "locationId");
-  const categoryCounts = new Map();
-  items.forEach((item) => item.categories.forEach((category) => categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1)));
+  const categoryCounts = getCategoryCounts(items);
+  const visibleLocations = getAllLocationsFromData().filter((location) => {
+    const count = locationCounts.get(location.id) || 0;
+    return count > 0 || state.locationFilter === location.id || state.selectedMapLocation === location.id;
+  });
+  const visibleCategories = getActiveCategoryLabels({ includeZero: false, includeHiddenSelected: state.categoryFilter });
 
   els.locationFilterBar.innerHTML = [
     filterChip("전체", "all", state.locationFilter, "location", items.length, "location-filter"),
-    ...getAllLocationsFromData().map((location) => filterChip(location.label, location.id, state.locationFilter, location.icon, locationCounts.get(location.id) || 0, "location-filter"))
+    ...visibleLocations.map((location) => filterChip(location.label, location.id, state.locationFilter, location.icon, locationCounts.get(location.id) || 0, "location-filter"))
   ].join("");
 
   els.projectFilterBar.innerHTML = [
@@ -632,7 +760,7 @@ function renderFilters() {
 
   els.categoryFilterBar.innerHTML = [
     filterChip("전체", "all", state.categoryFilter, "tags", items.length, "category-filter"),
-    ...[...customCategories].sort((a, b) => a.localeCompare(b, "ko")).map((category) => filterChip(category, category, state.categoryFilter, "tags", categoryCounts.get(category) || 0, "category-filter"))
+    ...visibleCategories.map((category) => filterChip(category, category, state.categoryFilter, "tags", categoryCounts.get(category) || 0, "category-filter"))
   ].join("");
 }
 
@@ -740,11 +868,15 @@ function itemCard(item) {
 function renderSpaceMap() {
   const items = getItems();
   const counts = countBy(items, "locationId");
-  els.spaceMap.innerHTML = getMapLocations().map((location) => {
+  const locations = getMapLocations();
+  els.spaceMap.innerHTML = locations.length ? locations.map((location) => {
     const count = counts.get(location.id) || 0;
     const active = state.selectedMapLocation === location.id;
     const typeClass = location.type === "greenhouse" ? "zone-greenhouse" : location.type === "lab" ? "zone-lab" : "zone-common";
-    return `<button class="map-zone ${typeClass} zone-${classToken(location.id)} ${active ? "active" : ""}" type="button" data-map-location="${escapeAttr(location.id)}">
+    const imageStyle = location.image ? ` style="--zone-image:url('${escapeCssUrl(location.image)}')"` : "";
+    const imageLayer = location.image ? `<span class="map-zone-photo" aria-hidden="true"></span>` : "";
+    return `<button class="map-zone ${typeClass} zone-${classToken(location.id)} ${location.image ? "has-photo" : ""} ${active ? "active" : ""}" type="button" data-map-location="${escapeAttr(location.id)}"${imageStyle}>
+      ${imageLayer}
       <div class="map-zone-main">
         <div>
           <strong>${escapeHtml(location.label)}</strong>
@@ -757,12 +889,15 @@ function renderSpaceMap() {
         <span class="map-label">items</span>
       </div>
     </button>`;
-  }).join("");
+  }).join("") : `<div class="empty-note">등록된 공간이 없습니다. 관리자 화면에서 공간을 추가해주세요.</div>`;
 }
 
 function renderMapDetail() {
   const location = getLocation(state.selectedMapLocation);
   const items = getItems().filter((item) => item.locationId === state.selectedMapLocation).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  const locationPhoto = location.image
+    ? `<img class="map-detail-photo" src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진">`
+    : `<div class="map-detail-photo placeholder">${icon("image")}<span>위치 사진 없음</span></div>`;
   els.mapDetailPanel.innerHTML = `<div class="map-detail-head">
       <div>
         <span class="eyebrow">${escapeHtml(location.group)}</span>
@@ -771,6 +906,7 @@ function renderMapDetail() {
       </div>
       <span class="zone-icon zone-${escapeAttr(location.type)}">${icon(location.icon)}</span>
     </div>
+    ${locationPhoto}
     <button class="btn ghost" type="button" data-location-filter="${escapeAttr(location.id)}">
       ${icon("boxes")}<span>이 장소만 목록에서 보기</span>
     </button>
@@ -794,17 +930,38 @@ function compactItem(item) {
 }
 
 function renderCategoryBoard() {
-  const items = getItems();
-  const counts = new Map();
-  items.forEach((item) => item.categories.forEach((category) => counts.set(category, (counts.get(category) || 0) + 1)));
-  const categories = [...customCategories].sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || a.localeCompare(b, "ko"));
-  els.categoryBoard.innerHTML = categories.length
-    ? categories.map((category) => `<article class="category-card">
-        <strong>${escapeHtml(category)}</strong>
-        <span>${(counts.get(category) || 0).toLocaleString()}개 물품에 사용 중</span>
-        <button class="btn ghost small" type="button" data-category-filter="${escapeAttr(category)}">이 분류 보기</button>
-      </article>`).join("")
+  const records = getCategoryRecords();
+  const addPanel = `<article class="category-admin-card editable-only">
+    <span class="eyebrow">Category Management</span>
+    <h3>분류 추가</h3>
+    <p>필터와 물품 등록 화면에 사용할 분류를 관리합니다. 삭제한 분류는 숨김 처리되며 복구할 수 있습니다.</p>
+    <div class="inline-add always-inline">
+      <input id="categoryAdminInput" type="text" placeholder="예: HPLC 분석 / 흡광도 분석 / 해당 없음" />
+      <button class="btn primary small" type="button" data-save-category>추가</button>
+    </div>
+  </article>`;
+
+  const cards = records.length
+    ? records.map(categoryCard).join("")
     : `<div class="empty-note">분류가 없습니다.</div>`;
+
+  els.categoryBoard.innerHTML = addPanel + cards;
+}
+
+function categoryCard(record) {
+  const status = record.hidden ? "숨김" : record.builtIn ? "기본" : "추가";
+  const actions = record.hidden
+    ? `<button class="btn primary small editable-only" type="button" data-restore-category="${escapeAttr(record.label)}">복구</button>`
+    : `<button class="btn ghost small" type="button" data-category-filter="${escapeAttr(record.label)}">이 분류 보기</button>
+       <button class="btn danger small editable-only" type="button" data-delete-category="${escapeAttr(record.label)}">삭제</button>`;
+  return `<article class="category-card ${record.hidden ? "is-hidden" : ""}">
+    <div class="category-card-top">
+      <strong>${escapeHtml(record.label)}</strong>
+      <span class="location-kind-badge">${status}</span>
+    </div>
+    <span>${record.count.toLocaleString()}개 물품에 사용 중</span>
+    <div class="category-card-actions">${actions}</div>
+  </article>`;
 }
 
 function renderAdminPanel() {
@@ -841,22 +998,35 @@ function renderAdminPanel() {
     </div>
   </div>`;
 
-  const counts = countBy(items, "locationId");
+  const itemsByLocation = items.reduce((acc, item) => {
+    if (!acc.has(item.locationId)) acc.set(item.locationId, []);
+    acc.get(item.locationId).push(item);
+    return acc;
+  }, new Map());
   const locations = getAdminLocations();
   els.locationManageList.innerHTML = locations.length
-    ? locations.map((location) => locationManageCard(location, counts.get(location.id) || 0)).join("")
+    ? locations.map((location) => locationManageCard(location, itemsByLocation.get(location.id) || [])).join("")
     : `<div class="empty-note">등록된 공간이 없습니다.</div>`;
 }
 
-function locationManageCard(location, count) {
+function locationManageCard(location, locationItems) {
+  const count = locationItems.length;
   const hiddenClass = location.hidden ? " is-hidden" : "";
   const kind = location.builtIn ? "기본" : "추가";
   const actions = location.hidden
     ? `<button class="btn primary small editable-only" type="button" data-restore-location="${escapeAttr(location.id)}">복구</button>`
     : `<button class="btn ghost small editable-only" type="button" data-edit-location="${escapeAttr(location.id)}">수정</button>
        <button class="btn danger small editable-only" type="button" data-delete-location="${escapeAttr(location.id)}">삭제</button>`;
+  const photo = location.image
+    ? `<span class="location-manage-photo"><img src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진"></span>`
+    : `<span class="location-manage-icon">${icon(location.icon)}</span>`;
+  const itemList = count
+    ? `<div class="location-item-list">
+        ${locationItems.sort((a, b) => a.name.localeCompare(b.name, "ko")).map(adminLocationItem).join("")}
+      </div>`
+    : `<div class="location-item-list empty">등록된 물품이 없습니다.</div>`;
   return `<article class="location-manage-card${hiddenClass}">
-    <span class="location-manage-icon">${icon(location.icon)}</span>
+    ${photo}
     <div class="location-manage-main">
       <strong>${escapeHtml(location.label)} <span class="location-kind-badge">${location.hidden ? "숨김" : kind}</span></strong>
       <span>${escapeHtml(location.group)} · ${escapeHtml(location.desc)}</span>
@@ -865,7 +1035,22 @@ function locationManageCard(location, count) {
       <span class="location-count-badge">${count.toLocaleString()}개 물품</span>
       ${actions}
     </div>
+    ${itemList}
   </article>`;
+}
+
+function adminLocationItem(item) {
+  const thumb = item.img
+    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}">`
+    : escapeHtml(firstChar(item.name));
+  return `<button class="location-item-row" type="button" data-item-ref="${escapeAttr(item.refKey)}">
+    <span class="location-item-thumb" style="${item.img ? "" : `background:${placeholderGradient(item.name)}`}">${thumb}</span>
+    <span class="location-item-main">
+      <strong>${escapeHtml(item.name)}</strong>
+      <em>${escapeHtml(item.loc || "세부 위치 미지정")}</em>
+    </span>
+    <span class="location-item-qty">${item.qty.toLocaleString()}개</span>
+  </button>`;
 }
 
 function openLocationModal(location = null) {
@@ -881,6 +1066,9 @@ function openLocationModal(location = null) {
   els.locationTypeSelect.value = location?.type || "common";
   els.locationIconSelect.value = location?.icon || "location";
   els.locationDescInput.value = location?.desc || "";
+  tempLocationImageData = location?.image || "";
+  els.locationImageUrlInput.value = tempLocationImageData && !String(tempLocationImageData).startsWith("data:") ? tempLocationImageData : "";
+  renderLocationImagePreview(tempLocationImageData);
   openModal("locationModal");
   setTimeout(() => els.locationNameInput.focus(), 50);
 }
@@ -907,6 +1095,7 @@ async function saveLocation() {
     type: els.locationTypeSelect.value || "common",
     icon: els.locationIconSelect.value || "location",
     desc: els.locationDescInput.value.trim() || "사용자 추가 보관 공간",
+    image: tempLocationImageData || normalizedUrlValue(els.locationImageUrlInput.value) || null,
     createdAt: previous.createdAt || now,
     createdBy: previous.createdBy || currentUser?.email || "",
     updatedAt: now,
@@ -916,8 +1105,11 @@ async function saveLocation() {
   try {
     await set(ref(db, `settings/locations/${id}`), payload);
     await remove(ref(db, `settings/hiddenLocations/${id}`));
+    settingsRaw.locations = { ...(settingsRaw.locations || {}), [id]: payload };
+    if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[id];
     state.selectedMapLocation = id;
     closeModal("locationModal");
+    renderAll();
   } catch (error) {
     showDialog("공간 저장 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
   }
@@ -943,8 +1135,10 @@ async function deleteLocation(locationId) {
   try {
     if (isDefaultLocation(locationId)) {
       await set(ref(db, `settings/hiddenLocations/${locationId}`), true);
+      settingsRaw.hiddenLocations = { ...(settingsRaw.hiddenLocations || {}), [locationId]: true };
     } else {
       await remove(ref(db, `settings/locations/${locationId}`));
+      if (settingsRaw.locations) delete settingsRaw.locations[locationId];
     }
     if (state.locationFilter === locationId) state.locationFilter = "all";
     if (state.selectedMapLocation === locationId) ensureSelectedLocation();
@@ -962,9 +1156,97 @@ async function restoreLocation(locationId) {
 
   try {
     await remove(ref(db, `settings/hiddenLocations/${locationId}`));
+    if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[locationId];
     state.selectedMapLocation = locationId;
+    renderAll();
   } catch (error) {
     showDialog("공간 복구 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
+  }
+}
+
+async function saveCategoryFromBoard() {
+  if (!canEdit()) {
+    showDialog("관리자 권한 필요", "분류를 추가하려면 관리자 Google 계정으로 로그인해주세요.", { alertOnly: true });
+    return;
+  }
+
+  const input = document.getElementById("categoryAdminInput");
+  const label = normalizeCategoryName(input?.value || "");
+  if (!label) {
+    showDialog("입력 필요", "추가할 분류 이름을 입력해주세요.", { alertOnly: true });
+    input?.focus();
+    return;
+  }
+
+  const id = getCategoryKey(label);
+  const now = new Date().toISOString();
+  const payload = {
+    label,
+    createdAt: settingsRaw.categories?.[id]?.createdAt || now,
+    createdBy: settingsRaw.categories?.[id]?.createdBy || currentUser?.email || "",
+    updatedAt: now,
+    updatedBy: currentUser?.email || ""
+  };
+
+  try {
+    await set(ref(db, `settings/categories/${id}`), payload);
+    await remove(ref(db, `settings/hiddenCategories/${id}`));
+    settingsRaw.categories = { ...(settingsRaw.categories || {}), [id]: payload };
+    if (settingsRaw.hiddenCategories) delete settingsRaw.hiddenCategories[id];
+    customCategories.add(label);
+    if (input) input.value = "";
+    renderAll();
+  } catch (error) {
+    showDialog("분류 저장 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
+  }
+}
+
+async function deleteCategory(label) {
+  if (!canEdit()) {
+    showDialog("관리자 권한 필요", "분류를 삭제하려면 관리자 Google 계정으로 로그인해주세요.", { alertOnly: true });
+    return;
+  }
+  const normalized = normalizeCategoryName(label);
+  if (!normalized) return;
+  if (normalized === CATEGORY_NONE) {
+    const okNone = await showDialog("분류 숨김", "「해당 없음」도 숨길 수 있지만, 분류가 없는 물품은 계속 해당 없음으로 저장됩니다. 숨기시겠습니까?");
+    if (!okNone) return;
+  } else {
+    const count = getCategoryCounts().get(normalized) || 0;
+    const ok = await showDialog("분류 삭제", `「${normalized}」 분류를 숨기시겠습니까?${count ? `\n현재 ${count.toLocaleString()}개 물품에 사용 중인 값은 삭제하지 않고 카드 태그로만 유지됩니다.` : ""}`);
+    if (!ok) return;
+  }
+
+  const id = getCategoryKey(normalized);
+  try {
+    await set(ref(db, `settings/hiddenCategories/${id}`), true);
+    settingsRaw.hiddenCategories = { ...(settingsRaw.hiddenCategories || {}), [id]: true };
+    if (!isDefaultCategory(normalized) && !(getCategoryCounts().get(normalized) || 0)) {
+      await remove(ref(db, `settings/categories/${id}`));
+      if (settingsRaw.categories) delete settingsRaw.categories[id];
+    }
+    if (state.categoryFilter === normalized) state.categoryFilter = "all";
+    renderAll();
+  } catch (error) {
+    showDialog("분류 삭제 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
+  }
+}
+
+async function restoreCategory(label) {
+  if (!canEdit()) {
+    showDialog("관리자 권한 필요", "분류를 복구하려면 관리자 Google 계정으로 로그인해주세요.", { alertOnly: true });
+    return;
+  }
+  const normalized = normalizeCategoryName(label);
+  if (!normalized) return;
+  const id = getCategoryKey(normalized);
+  try {
+    await remove(ref(db, `settings/hiddenCategories/${id}`));
+    if (settingsRaw.hiddenCategories) delete settingsRaw.hiddenCategories[id];
+    customCategories.add(normalized);
+    renderAll();
+  } catch (error) {
+    showDialog("분류 복구 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
   }
 }
 
@@ -975,6 +1257,10 @@ function createLocationId(label) {
   let index = 2;
   while (existingIds.has(`${base}-${index}`)) index += 1;
   return `${base}-${index}`;
+}
+
+function classToken(value) {
+  return normalizeLocationKey(value) || "custom";
 }
 
 function normalizeLocationKey(label) {
@@ -996,6 +1282,7 @@ function openItemModal(item = null) {
 
   editingItem = item;
   tempImageData = item?.img || null;
+  els.itemImageUrlInput.value = tempImageData && !String(tempImageData).startsWith("data:") ? tempImageData : "";
   els.itemModalTitle.textContent = item ? "물품 상세" : "새 물품 등록";
   els.deleteItemBtn.hidden = !item;
 
@@ -1017,6 +1304,7 @@ function openItemModal(item = null) {
 
 function populateLocationSelect() {
   if (!els.itemLocationSelect) return;
+  const previousValue = els.itemLocationSelect.value;
   const grouped = getAllLocationsFromData().reduce((acc, location) => {
     if (!acc.has(location.group)) acc.set(location.group, []);
     acc.get(location.group).push(location);
@@ -1025,6 +1313,9 @@ function populateLocationSelect() {
   els.itemLocationSelect.innerHTML = [...grouped.entries()].map(([group, locations]) => `<optgroup label="${escapeAttr(group)}">
     ${locations.map((location) => `<option value="${escapeAttr(location.id)}">${escapeHtml(location.label)}</option>`).join("")}
   </optgroup>`).join("");
+  if (previousValue && [...els.itemLocationSelect.options].some((option) => option.value === previousValue)) {
+    els.itemLocationSelect.value = previousValue;
+  }
 }
 
 function renderProjectOptions(selectedProject) {
@@ -1035,10 +1326,12 @@ function renderProjectOptions(selectedProject) {
 }
 
 function renderCategoryChecklist(selectedSet = new Set()) {
-  const categories = [...customCategories].sort((a, b) => a.localeCompare(b, "ko"));
-  els.categoryChecklist.innerHTML = categories.map((category) => `<label class="category-check">
+  selectedSet.forEach((category) => customCategories.add(category));
+  const selectedHidden = [...selectedSet].find((category) => isCategoryHidden(category)) || "";
+  const categories = getActiveCategoryLabels({ includeZero: true, includeHiddenSelected: selectedHidden });
+  els.categoryChecklist.innerHTML = categories.map((category) => `<label class="category-check ${isCategoryHidden(category) ? "is-hidden" : ""}">
     <input type="checkbox" value="${escapeAttr(category)}" ${selectedSet.has(category) ? "checked" : ""}>
-    <span>${escapeHtml(category)}</span>
+    <span>${escapeHtml(category)}${isCategoryHidden(category) ? " · 숨김" : ""}</span>
   </label>`).join("");
 }
 
@@ -1104,34 +1397,129 @@ function renderImagePreview(src) {
   }
 }
 
-function handleImageSelect(event) {
+function renderLocationImagePreview(src) {
+  if (!els.locationImagePreview || !els.locationImagePlaceholder) return;
+  if (src) {
+    els.locationImagePreview.src = src;
+    els.locationImagePreview.style.display = "block";
+    els.locationImagePlaceholder.style.display = "none";
+  } else {
+    els.locationImagePreview.removeAttribute("src");
+    els.locationImagePreview.style.display = "none";
+    els.locationImagePlaceholder.style.display = "grid";
+  }
+}
+
+async function handleImageSelect(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (readerEvent) => {
-    const image = new Image();
-    image.onload = () => {
-      const maxSize = 900;
-      let { width, height } = image;
-      if (width > height && width > maxSize) {
-        height = Math.round(height * maxSize / width);
-        width = maxSize;
-      } else if (height > maxSize) {
-        width = Math.round(width * maxSize / height);
-        height = maxSize;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(image, 0, 0, width, height);
-      tempImageData = canvas.toDataURL("image/jpeg", 0.82);
-      renderImagePreview(tempImageData);
+  try {
+    tempImageData = await readImageFile(file, 1000, 0.84);
+    els.itemImageUrlInput.value = "";
+    renderImagePreview(tempImageData);
+  } catch (error) {
+    showDialog("사진 처리 실패", error.message || "이미지를 읽지 못했습니다.", { alertOnly: true });
+  } finally {
+    event.target.value = "";
+  }
+}
+
+async function handleLocationImageSelect(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    tempLocationImageData = await readImageFile(file, 1400, 0.84);
+    els.locationImageUrlInput.value = "";
+    renderLocationImagePreview(tempLocationImageData);
+  } catch (error) {
+    showDialog("사진 처리 실패", error.message || "이미지를 읽지 못했습니다.", { alertOnly: true });
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function clearItemImage() {
+  if (!canEdit()) return;
+  tempImageData = null;
+  els.itemImageUrlInput.value = "";
+  renderImagePreview(null);
+}
+
+function clearLocationImage() {
+  if (!canEdit()) return;
+  tempLocationImageData = null;
+  els.locationImageUrlInput.value = "";
+  renderLocationImagePreview(null);
+}
+
+function handleItemImageUrlChange() {
+  if (!canEdit()) return;
+  const value = normalizedUrlValue(els.itemImageUrlInput.value);
+  if (value) {
+    tempImageData = value;
+    renderImagePreview(value);
+  } else if (tempImageData && !String(tempImageData).startsWith("data:")) {
+    tempImageData = null;
+    renderImagePreview(null);
+  }
+}
+
+function handleLocationImageUrlChange() {
+  if (!canEdit()) return;
+  const value = normalizedUrlValue(els.locationImageUrlInput.value);
+  if (value) {
+    tempLocationImageData = value;
+    renderLocationImagePreview(value);
+  } else if (tempLocationImageData && !String(tempLocationImageData).startsWith("data:")) {
+    tempLocationImageData = null;
+    renderLocationImagePreview(null);
+  }
+}
+
+function normalizedUrlValue(value) {
+  const clean = String(value || "").trim();
+  if (!clean) return "";
+  if (clean.startsWith("data:image/")) return clean;
+  try {
+    const url = new URL(clean);
+    if (["http:", "https:"].includes(url.protocol)) return url.href;
+  } catch (_) {
+    return "";
+  }
+  return "";
+}
+
+function readImageFile(file, maxSize = 1000, quality = 0.84) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("이미지 파일만 업로드할 수 있습니다."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
+    reader.onload = (readerEvent) => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
+      image.onload = () => {
+        let { width, height } = image;
+        if (width > height && width > maxSize) {
+          height = Math.round(height * maxSize / width);
+          width = maxSize;
+        } else if (height >= width && height > maxSize) {
+          width = Math.round(width * maxSize / height);
+          height = maxSize;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.src = readerEvent.target.result;
     };
-    image.src = readerEvent.target.result;
-  };
-  reader.readAsDataURL(file);
-  event.target.value = "";
+    reader.readAsDataURL(file);
+  });
 }
 
 function changeQty(delta) {
@@ -1170,7 +1558,7 @@ async function saveItem() {
     project: projectInput?.value || "both",
     categories,
     cat: categories[0],
-    img: tempImageData || null,
+    img: tempImageData || normalizedUrlValue(els.itemImageUrlInput.value) || null,
     updatedAt: now,
     updatedBy: currentUser?.email || ""
   };
@@ -1222,6 +1610,7 @@ function closeModal(id) {
   }
   if (id === "locationModal") {
     editingLocationId = null;
+    tempLocationImageData = null;
   }
 }
 
@@ -1289,6 +1678,10 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function escapeCssUrl(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "");
 }
 
 function icon(name) {
