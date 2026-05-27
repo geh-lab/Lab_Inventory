@@ -1,7 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
 const firebaseConfig = {
   apiKey: "AIzaSyCzMpS-PnOPEnCL6Fqk8VteNzHMrpXMmS8",
   authDomain: "lab-inventory-b7a6b.firebaseapp.com",
@@ -57,17 +53,24 @@ let tempImageData = null;
 let tempLocationImageData = null;
 let dialogResolver = null;
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: "select_account" });
+let app = null;
+let db = null;
+let auth = null;
+let provider = null;
+let firebaseReady = false;
+let firebaseBooting = false;
+let firebaseError = null;
+const fb = {};
 
 const els = {
   sidebarToggle: document.getElementById("sidebarToggle"),
   searchInput: document.getElementById("searchInput"),
   themeToggle: document.getElementById("themeToggle"),
   themeToggleText: document.getElementById("themeToggleText"),
+  themeToggleSide: document.getElementById("themeToggleSide"),
+  themeToggleSideText: document.getElementById("themeToggleSideText"),
+  themeFab: document.getElementById("themeFab"),
+  themeFabText: document.getElementById("themeFabText"),
   authBtn: document.getElementById("authBtn"),
   authBtnText: document.getElementById("authBtnText"),
   authAvatar: document.getElementById("authAvatar"),
@@ -169,10 +172,9 @@ function init() {
   populateLocationSelect();
   bindEvents();
   restoreSidebarState();
-  watchAuth();
-  watchInventory();
-  watchSettings();
   renderAll();
+  window.LabInventoryFullAppReady = true;
+  initFirebase();
 }
 
 function hydrateIcons(root = document) {
@@ -184,7 +186,9 @@ function hydrateIcons(root = document) {
 
 function bindEvents() {
   els.sidebarToggle.addEventListener("click", toggleSidebar);
-  els.themeToggle.addEventListener("click", toggleTheme);
+  document.querySelectorAll("[data-theme-toggle], #themeToggle, #themeToggleSide, #themeFab").forEach((button) => {
+    button.addEventListener("click", toggleTheme);
+  });
   els.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
     renderAll();
@@ -321,15 +325,30 @@ function restoreSidebarState() {
 
 function applyTheme() {
   const theme = state.theme === "light" ? "light" : "dark";
+  const nextThemeLabel = theme === "light" ? "다크" : "라이트";
+  const nextThemeIcon = theme === "light" ? "moon" : "sun";
+  const nextThemeTitle = theme === "light" ? "다크 모드로 전환" : "라이트 모드로 전환";
+
   state.theme = theme;
   document.body.classList.toggle("theme-light", theme === "light");
   document.body.classList.toggle("theme-dark", theme !== "light");
   document.documentElement.style.colorScheme = theme;
-  if (els.themeToggle) {
-    els.themeToggle.querySelector("[data-icon]").innerHTML = icon(theme === "light" ? "sun" : "moon");
-    els.themeToggleText.textContent = theme === "light" ? "라이트" : "다크";
-    els.themeToggle.title = theme === "light" ? "다크 모드로 전환" : "라이트 모드로 전환";
-  }
+
+  [
+    [els.themeToggle, els.themeToggleText],
+    [els.themeToggleSide, els.themeToggleSideText],
+    [els.themeFab, els.themeFabText]
+  ].forEach(([button, label]) => {
+    if (!button) return;
+    const iconSlot = button.querySelector("[data-icon]");
+    if (iconSlot) {
+      iconSlot.dataset.icon = nextThemeIcon;
+      iconSlot.innerHTML = icon(nextThemeIcon);
+    }
+    if (label) label.textContent = nextThemeLabel;
+    button.title = nextThemeTitle;
+    button.setAttribute("aria-label", nextThemeTitle);
+  });
 }
 
 function toggleTheme() {
@@ -338,8 +357,75 @@ function toggleTheme() {
   applyTheme();
 }
 
+async function initFirebase() {
+  if (firebaseReady || firebaseBooting) return;
+  firebaseBooting = true;
+  try {
+    const [appModule, databaseModule, authModule] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"),
+      import("https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js")
+    ]);
+
+    fb.ref = databaseModule.ref;
+    fb.onValue = databaseModule.onValue;
+    fb.set = databaseModule.set;
+    fb.remove = databaseModule.remove;
+    fb.signInWithPopup = authModule.signInWithPopup;
+    fb.signOut = authModule.signOut;
+    fb.onAuthStateChanged = authModule.onAuthStateChanged;
+
+    app = appModule.initializeApp(firebaseConfig);
+    db = databaseModule.getDatabase(app);
+    auth = authModule.getAuth(app);
+    provider = new authModule.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+
+    firebaseReady = true;
+    firebaseError = null;
+    watchAuth();
+    watchInventory();
+    watchSettings();
+    updateAuthUI();
+    renderAdminPanel();
+  } catch (error) {
+    firebaseError = error;
+    firebaseReady = false;
+    console.error("Firebase 초기화 실패", error);
+    updateAuthUI();
+    renderAdminPanel();
+  } finally {
+    firebaseBooting = false;
+  }
+}
+
+function canUseFirebase() {
+  return firebaseReady && db && auth && provider && fb.ref && fb.set && fb.remove;
+}
+
+function explainFirebaseError() {
+  if (location.protocol === "file:") {
+    return "현재 file:// 방식으로 열린 것 같습니다. 화면 전환과 테마 변경은 가능하지만 Google 로그인/저장은 로컬 서버에서 테스트해야 안정적으로 동작합니다. 터미널에서 python3 -m http.server 5500 실행 후 http://localhost:5500 으로 접속해주세요.";
+  }
+  if (firebaseError?.message) return firebaseError.message;
+  return "Firebase SDK를 불러오지 못했습니다. 인터넷 연결, Firebase Authorized domains, 또는 브라우저 콘솔 오류를 확인해주세요.";
+}
+
+function dbRef(path) {
+  if (!canUseFirebase()) throw new Error(explainFirebaseError());
+  return fb.ref(db, path);
+}
+
+function dbSet(path, value) {
+  return fb.set(dbRef(path), value);
+}
+
+function dbRemove(path) {
+  return fb.remove(dbRef(path));
+}
+
 function watchAuth() {
-  onAuthStateChanged(auth, (user) => {
+  fb.onAuthStateChanged(auth, (user) => {
     currentUser = user || null;
     updateAuthUI();
     updateFormAccess();
@@ -348,8 +434,8 @@ function watchAuth() {
 }
 
 function watchInventory() {
-  const dbRef = ref(db, "inventory");
-  onValue(dbRef, (snapshot) => {
+  const inventoryRef = fb.ref(db, "inventory");
+  fb.onValue(inventoryRef, (snapshot) => {
     inventoryRaw = snapshot.val() || {};
     rebuildCategorySet();
     renderAll();
@@ -360,8 +446,8 @@ ${error.message}`, { alertOnly: true });
 }
 
 function watchSettings() {
-  const dbRef = ref(db, "settings");
-  onValue(dbRef, (snapshot) => {
+  const settingsRef = fb.ref(db, "settings");
+  fb.onValue(settingsRef, (snapshot) => {
     const value = snapshot.val() || {};
     settingsRaw = {
       locations: value.locations || {},
@@ -378,14 +464,25 @@ ${error.message}`, { alertOnly: true });
 }
 
 async function handleAuthClick() {
+  if (!firebaseReady) await initFirebase();
+  if (!canUseFirebase()) {
+    showDialog("Firebase 연결 필요", explainFirebaseError(), { alertOnly: true });
+    return;
+  }
+
   if (currentUser) {
     const ok = await showDialog("로그아웃", "현재 Google 계정에서 로그아웃하시겠습니까?");
-    if (ok) signOut(auth);
+    if (ok) fb.signOut(auth);
+    return;
+  }
+
+  if (!/^https?:$/.test(location.protocol)) {
+    showDialog("로컬 서버 필요", explainFirebaseError(), { alertOnly: true });
     return;
   }
 
   try {
-    await signInWithPopup(auth, provider);
+    await fb.signInWithPopup(auth, provider);
   } catch (error) {
     showDialog("로그인 실패", error.message || "Google 로그인 중 오류가 발생했습니다.", { alertOnly: true });
   }
@@ -420,10 +517,10 @@ function updateAuthUI() {
       els.authAvatar.textContent = initials(currentUser.displayName || currentUser.email || "G");
     }
   } else {
-    els.authBtnText.textContent = "Google 로그인";
-    els.authMiniTitle.textContent = "로그인 필요";
-    els.authMiniSub.textContent = "관리자 계정으로 편집";
-    els.authAvatar.textContent = "G";
+    els.authBtnText.textContent = firebaseError && !firebaseReady ? "연결 확인" : "Google 로그인";
+    els.authMiniTitle.textContent = firebaseError && !firebaseReady ? "Firebase 연결 실패" : "로그인 필요";
+    els.authMiniSub.textContent = firebaseError && !firebaseReady ? "설정/로컬 서버 확인" : "관리자 계정으로 편집";
+    els.authAvatar.textContent = firebaseError && !firebaseReady ? "!" : "G";
   }
 }
 
@@ -646,7 +743,7 @@ function getConfiguredLocations() {
     .map((location) => normalizeLocationRecord(location.id, overrides[location.id] || {}, { ...location, builtIn: true }));
 
   const customLocations = Object.entries(overrides)
-    .filter(([id]) => !isDefaultLocation(id))
+    .filter(([id]) => !isDefaultLocation(id) && !hiddenIds.has(id))
     .map(([id, raw]) => normalizeLocationRecord(id, raw, { builtIn: false }));
 
   return [...defaultLocations, ...customLocations].sort(sortLocations);
@@ -661,7 +758,7 @@ function getAdminLocations() {
   }));
   const customLocations = Object.entries(overrides)
     .filter(([id]) => !isDefaultLocation(id))
-    .map(([id, raw]) => ({ ...normalizeLocationRecord(id, raw, { builtIn: false }), hidden: false }));
+    .map(([id, raw]) => ({ ...normalizeLocationRecord(id, raw, { builtIn: false }), hidden: hiddenIds.has(id) }));
   return [...defaultLocations, ...customLocations].sort(sortLocations);
 }
 
@@ -970,12 +1067,17 @@ function renderAdminPanel() {
   const editable = canEdit();
   const loggedIn = Boolean(currentUser);
   const adminEmails = ADMIN_EMAILS.map((email) => String(email).trim()).filter(Boolean);
-  const statusTitle = editable ? "관리자 모드" : loggedIn ? "읽기 전용 계정" : "로그인 필요";
-  const statusDesc = editable
-    ? "현재 계정은 물품과 공간을 추가·수정·삭제할 수 있습니다."
-    : loggedIn
-      ? "로그인은 되어 있지만 관리자 이메일 목록에 없는 계정입니다. 조회만 가능합니다."
-      : "Google 관리자 계정으로 로그인하면 편집 기능이 활성화됩니다.";
+  const firebaseIssue = !firebaseReady && firebaseError;
+  const statusTitle = firebaseIssue ? "Firebase 연결 실패" : editable ? "관리자 모드" : loggedIn ? "읽기 전용 계정" : "로그인 필요";
+  const statusDesc = firebaseIssue
+    ? "화면 전환과 테마 변경은 사용할 수 있지만, Google 로그인과 Firebase 저장은 연결 복구 후 가능합니다."
+    : editable
+      ? "현재 계정은 물품과 공간을 추가·수정·삭제할 수 있습니다."
+      : loggedIn
+        ? "로그인은 되어 있지만 관리자 이메일 목록에 없는 계정입니다. 조회만 가능합니다."
+        : firebaseBooting
+          ? "Firebase 연결을 준비하는 중입니다."
+          : "Google 관리자 계정으로 로그인하면 편집 기능이 활성화됩니다.";
 
   els.adminStatusPanel.innerHTML = `<div class="admin-status-card">
     <div class="admin-status-top">
@@ -1103,8 +1205,8 @@ async function saveLocation() {
   };
 
   try {
-    await set(ref(db, `settings/locations/${id}`), payload);
-    await remove(ref(db, `settings/hiddenLocations/${id}`));
+    await dbSet(`settings/locations/${id}`, payload);
+    await dbRemove(`settings/hiddenLocations/${id}`);
     settingsRaw.locations = { ...(settingsRaw.locations || {}), [id]: payload };
     if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[id];
     state.selectedMapLocation = id;
@@ -1134,10 +1236,10 @@ async function deleteLocation(locationId) {
 
   try {
     if (isDefaultLocation(locationId)) {
-      await set(ref(db, `settings/hiddenLocations/${locationId}`), true);
+      await dbSet(`settings/hiddenLocations/${locationId}`, true);
       settingsRaw.hiddenLocations = { ...(settingsRaw.hiddenLocations || {}), [locationId]: true };
     } else {
-      await remove(ref(db, `settings/locations/${locationId}`));
+      await dbRemove(`settings/locations/${locationId}`);
       if (settingsRaw.locations) delete settingsRaw.locations[locationId];
     }
     if (state.locationFilter === locationId) state.locationFilter = "all";
@@ -1155,7 +1257,7 @@ async function restoreLocation(locationId) {
   }
 
   try {
-    await remove(ref(db, `settings/hiddenLocations/${locationId}`));
+    await dbRemove(`settings/hiddenLocations/${locationId}`);
     if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[locationId];
     state.selectedMapLocation = locationId;
     renderAll();
@@ -1189,8 +1291,8 @@ async function saveCategoryFromBoard() {
   };
 
   try {
-    await set(ref(db, `settings/categories/${id}`), payload);
-    await remove(ref(db, `settings/hiddenCategories/${id}`));
+    await dbSet(`settings/categories/${id}`, payload);
+    await dbRemove(`settings/hiddenCategories/${id}`);
     settingsRaw.categories = { ...(settingsRaw.categories || {}), [id]: payload };
     if (settingsRaw.hiddenCategories) delete settingsRaw.hiddenCategories[id];
     customCategories.add(label);
@@ -1219,10 +1321,10 @@ async function deleteCategory(label) {
 
   const id = getCategoryKey(normalized);
   try {
-    await set(ref(db, `settings/hiddenCategories/${id}`), true);
+    await dbSet(`settings/hiddenCategories/${id}`, true);
     settingsRaw.hiddenCategories = { ...(settingsRaw.hiddenCategories || {}), [id]: true };
     if (!isDefaultCategory(normalized) && !(getCategoryCounts().get(normalized) || 0)) {
-      await remove(ref(db, `settings/categories/${id}`));
+      await dbRemove(`settings/categories/${id}`);
       if (settingsRaw.categories) delete settingsRaw.categories[id];
     }
     if (state.categoryFilter === normalized) state.categoryFilter = "all";
@@ -1241,7 +1343,7 @@ async function restoreCategory(label) {
   if (!normalized) return;
   const id = getCategoryKey(normalized);
   try {
-    await remove(ref(db, `settings/hiddenCategories/${id}`));
+    await dbRemove(`settings/hiddenCategories/${id}`);
     if (settingsRaw.hiddenCategories) delete settingsRaw.hiddenCategories[id];
     customCategories.add(normalized);
     renderAll();
@@ -1567,9 +1669,9 @@ async function saveItem() {
 
   try {
     if (editingItem && editingItem.sourcePath !== targetLocation) {
-      await remove(ref(db, `inventory/${editingItem.sourcePath}/${editingItem.id}`));
+      await dbRemove(`inventory/${editingItem.sourcePath}/${editingItem.id}`);
     }
-    await set(ref(db, `inventory/${targetLocation}/${itemId}`), payload);
+    await dbSet(`inventory/${targetLocation}/${itemId}`, payload);
     closeModal("itemModal");
   } catch (error) {
     showDialog("저장 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
@@ -1585,7 +1687,7 @@ async function deleteItem() {
   const ok = await showDialog("삭제 확인", `「${editingItem.name}」 물품을 삭제하시겠습니까?`);
   if (!ok) return;
   try {
-    await remove(ref(db, `inventory/${editingItem.sourcePath}/${editingItem.id}`));
+    await dbRemove(`inventory/${editingItem.sourcePath}/${editingItem.id}`);
     closeModal("itemModal");
   } catch (error) {
     showDialog("삭제 실패", error.message || "Firebase 삭제 중 오류가 발생했습니다.", { alertOnly: true });

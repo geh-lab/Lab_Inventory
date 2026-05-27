@@ -51,6 +51,10 @@
       </nav>
 
       <div class="sidebar-footer">
+        <button class="sidebar-theme-btn" id="themeToggleSide" data-theme-toggle type="button" title="라이트/다크 모드 전환">
+          <span data-icon="sun">◐</span>
+          <span class="sidebar-theme-label" id="themeToggleSideText">라이트</span>
+        </button>
         <div class="auth-mini">
           <div class="auth-avatar" id="authAvatar">G</div>
           <div class="auth-mini-copy">
@@ -73,6 +77,10 @@
             <span data-icon="search"></span>
             <input id="searchInput" type="search" placeholder="물품명, 위치, 설명, 분류 검색" autocomplete="off" />
           </div>
+          <button class="btn ghost theme-toggle" id="themeToggle" data-theme-toggle type="button" title="라이트/다크 모드 전환">
+            <span data-icon="sun">◐</span>
+            <span id="themeToggleText">라이트</span>
+          </button>
           <button class="btn ghost" id="authBtn" type="button">
             <span data-icon="google"></span>
             <span id="authBtnText">Google 로그인</span>
@@ -250,10 +258,20 @@
               <strong>사진 없음</strong>
             </div>
           </div>
-          <button class="btn ghost editable-only" id="imagePickBtn" type="button">
-            <span data-icon="upload"></span>
-            <span>사진 선택</span>
-          </button>
+          <div class="image-actions editable-only">
+            <button class="btn ghost" id="imagePickBtn" type="button">
+              <span data-icon="upload"></span>
+              <span>사진 업로드/선택</span>
+            </button>
+            <button class="btn ghost" id="removeItemImageBtn" type="button">
+              <span data-icon="trash"></span>
+              <span>사진 제거</span>
+            </button>
+          </div>
+          <label class="image-url-row editable-only">
+            <span>사진 URL</span>
+            <input id="itemImageUrlInput" type="url" placeholder="https://... 이미지 주소" />
+          </label>
           <input type="file" id="itemImageInput" accept="image/*" />
         </div>
 
@@ -324,6 +342,32 @@
         </button>
       </div>
       <div class="modal-body">
+        <div class="space-image-editor">
+          <div class="space-image-frame">
+            <img id="locationImagePreview" alt="공간 위치 사진" />
+            <div class="image-placeholder" id="locationImagePlaceholder">
+              <span data-icon="image"></span>
+              <strong>공간 위치 사진 없음</strong>
+              <small>지도 카드와 상세 패널에 표시됩니다.</small>
+            </div>
+          </div>
+          <div class="space-image-controls editable-only">
+            <button class="btn ghost" id="locationImagePickBtn" type="button">
+              <span data-icon="upload"></span>
+              <span>위치 사진 업로드/선택</span>
+            </button>
+            <button class="btn ghost" id="removeLocationImageBtn" type="button">
+              <span data-icon="trash"></span>
+              <span>사진 제거</span>
+            </button>
+            <label class="image-url-row">
+              <span>사진 URL</span>
+              <input id="locationImageUrlInput" type="url" placeholder="https://... 공간 위치 사진 주소" />
+            </label>
+            <input type="file" id="locationImageInput" accept="image/*" />
+          </div>
+        </div>
+
         <div class="form-grid">
           <label class="field">
             <span>공간 이름</span>
@@ -389,6 +433,12 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <button class="theme-fab" id="themeFab" data-theme-toggle type="button" aria-label="라이트/다크 모드 전환">
+    <span data-icon="sun" aria-hidden="true">◐</span>
+    <strong id="themeFabText">라이트</strong>
+  </button>
+
+  <script src="./ui-fallback.js?v=click-theme-fix-20260526"></script>
+  <script defer src="./app.js?v=click-theme-fix-20260526"></script>
 </body>
 </html>
