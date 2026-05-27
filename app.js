@@ -14,15 +14,15 @@ const ADMIN_EMAILS = ["envlab1315@gmail.com"];
 const CATEGORY_NONE = "해당 없음";
 
 const DEFAULT_LOCATIONS = [
-  { id: "greenhouse-storage", label: "온실-창고", group: "온실권역", type: "greenhouse", icon: "warehouse", desc: "상토, 비료, 농자재, 온실 작업 도구 보관" },
-  { id: "greenhouse", label: "온실", group: "온실권역", type: "greenhouse", icon: "sprout", desc: "온실 재배·처리·생육조사 관련 물품" },
-  { id: "office", label: "사무실", group: "공용/관리", type: "common", icon: "desk", desc: "문서, 노트북, 라벨지, 행정/공용 물품" },
-  { id: "lab-storage", label: "실험실-창고", group: "실험실권역", type: "lab", icon: "archive", desc: "실험 소모품, 예비 장비, 보관 박스" },
-  { id: "lab", label: "실험실", group: "실험실권역", type: "lab", icon: "flask", desc: "실험대, 분석, 전처리 관련 물품" },
-  { id: "instrument", label: "공동기기실", group: "실험실권역", type: "lab", icon: "microscope", desc: "공동 장비, 계측기, 분석 장비" },
-  { id: "ktng", label: "KT&G", group: "외부/협력", type: "common", icon: "building", desc: "외부 협력 장소 또는 KT&G 관련 보관 물품" },
-  { id: "second-floor", label: "2층", group: "건물", type: "common", icon: "stairs", desc: "2층 공간 및 임시 보관 구역" },
-  { id: "etc", label: "기타", group: "기타", type: "common", icon: "more", desc: "아직 세부 위치를 정하지 않은 물품" }
+  { id: "greenhouse-storage", label: "온실-창고", group: "온실", major: "온실", middle: "창고", minor: "자재 보관", type: "greenhouse", icon: "warehouse", desc: "상토, 비료, 농자재, 온실 작업 도구 보관" },
+  { id: "greenhouse", label: "온실", group: "온실", major: "온실", middle: "재배 공간", minor: "", type: "greenhouse", icon: "sprout", desc: "온실 재배·처리·생육조사 관련 물품" },
+  { id: "office", label: "사무실", group: "사무실", major: "사무실", middle: "공용", minor: "", type: "common", icon: "desk", desc: "문서, 노트북, 라벨지, 행정/공용 물품" },
+  { id: "lab-storage", label: "실험실-창고", group: "실험실", major: "실험실", middle: "창고", minor: "소모품 보관", type: "lab", icon: "archive", desc: "실험 소모품, 예비 장비, 보관 박스" },
+  { id: "lab", label: "실험실", group: "실험실", major: "실험실", middle: "실험 공간", minor: "", type: "lab", icon: "flask", desc: "실험대, 분석, 전처리 관련 물품" },
+  { id: "instrument", label: "공동기기실", group: "실험실", major: "실험실", middle: "공동기기실", minor: "분석 장비", type: "lab", icon: "microscope", desc: "공동 장비, 계측기, 분석 장비" },
+  { id: "ktng", label: "KT&G", group: "외부", major: "외부", middle: "KT&G", minor: "", type: "common", icon: "building", desc: "외부 협력 장소 또는 KT&G 관련 보관 물품" },
+  { id: "second-floor", label: "2층", group: "건물", major: "건물", middle: "2층", minor: "", type: "common", icon: "stairs", desc: "2층 공간 및 임시 보관 구역" },
+  { id: "etc", label: "기타", group: "기타", major: "기타", middle: "미지정", minor: "", type: "common", icon: "more", desc: "아직 세부 위치를 정하지 않은 물품" }
 ];
 
 const PROJECTS = [
@@ -40,6 +40,7 @@ const state = {
   projectFilter: "all",
   categoryFilter: "all",
   selectedMapLocation: "greenhouse-storage",
+  selectedAdminLocation: "greenhouse-storage",
   theme: localStorage.getItem("labInventoryTheme") || "dark"
 };
 
@@ -52,6 +53,10 @@ let editingLocationId = null;
 let tempImageData = null;
 let tempLocationImageData = null;
 let dialogResolver = null;
+let itemsCache = null;
+let searchRenderTimer = null;
+let renderFrame = null;
+let webpSupported = null;
 
 let app = null;
 let db = null;
@@ -86,6 +91,7 @@ const els = {
   itemGrid: document.getElementById("itemGrid"),
   listMeta: document.getElementById("listMeta"),
   spaceMap: document.getElementById("spaceMap"),
+  mapSpaceTabs: document.getElementById("mapSpaceTabs"),
   mapDetailPanel: document.getElementById("mapDetailPanel"),
   categoryBoard: document.getElementById("categoryBoard"),
   adminStatusPanel: document.getElementById("adminStatusPanel"),
@@ -114,6 +120,8 @@ const els = {
   locationModalTitle: document.getElementById("locationModalTitle"),
   locationNameInput: document.getElementById("locationNameInput"),
   locationGroupInput: document.getElementById("locationGroupInput"),
+  locationMiddleInput: document.getElementById("locationMiddleInput"),
+  locationSmallInput: document.getElementById("locationSmallInput"),
   locationTypeSelect: document.getElementById("locationTypeSelect"),
   locationIconSelect: document.getElementById("locationIconSelect"),
   locationDescInput: document.getElementById("locationDescInput"),
@@ -191,7 +199,7 @@ function bindEvents() {
   });
   els.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
-    renderAll();
+    scheduleItemSearchRender();
   });
   els.authBtn.addEventListener("click", handleAuthClick);
   document.getElementById("addItemBtn").addEventListener("click", () => openItemModal());
@@ -263,6 +271,12 @@ function bindEvents() {
       setView("map");
       renderSpaceMap();
       renderMapDetail();
+    }
+
+    const adminLocationTab = event.target.closest("[data-admin-location-tab]");
+    if (adminLocationTab) {
+      state.selectedAdminLocation = adminLocationTab.dataset.adminLocationTab;
+      renderAdminPanel();
     }
 
     const openLocationBtn = event.target.closest("[data-open-location-modal]");
@@ -437,6 +451,7 @@ function watchInventory() {
   const inventoryRef = fb.ref(db, "inventory");
   fb.onValue(inventoryRef, (snapshot) => {
     inventoryRaw = snapshot.val() || {};
+    invalidateCaches();
     rebuildCategorySet();
     renderAll();
   }, (error) => {
@@ -455,6 +470,7 @@ function watchSettings() {
       categories: value.categories || {},
       hiddenCategories: value.hiddenCategories || {}
     };
+    invalidateCaches();
     rebuildCategorySet();
     renderAll();
   }, (error) => {
@@ -536,6 +552,10 @@ function setView(view) {
 }
 
 function renderAll() {
+  if (renderFrame) {
+    cancelAnimationFrame(renderFrame);
+    renderFrame = null;
+  }
   populateLocationSelect();
   renderFilters();
   renderDashboard();
@@ -548,7 +568,23 @@ function renderAll() {
   hydrateIcons();
 }
 
+function invalidateCaches() {
+  itemsCache = null;
+}
+
+function scheduleItemSearchRender() {
+  clearTimeout(searchRenderTimer);
+  searchRenderTimer = setTimeout(() => {
+    if (renderFrame) cancelAnimationFrame(renderFrame);
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = null;
+      renderItems();
+    });
+  }, 130);
+}
+
 function getItems() {
+  if (itemsCache) return itemsCache;
   const items = [];
   Object.entries(inventoryRaw || {}).forEach(([bucketId, bucketValue]) => {
     if (!bucketValue || typeof bucketValue !== "object" || Array.isArray(bucketValue)) return;
@@ -558,20 +594,22 @@ function getItems() {
       items.push(normalizeItem(id, bucketId, raw));
     });
   });
-  return items;
+  itemsCache = items.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  return itemsCache;
 }
 
 function normalizeItem(id, sourcePath, raw) {
   const locationId = normalizeLocationId(raw.locationId || sourcePath);
   const categories = normalizeCategories(raw.categories, raw.cat);
   const project = normalizeProject(raw.project || raw.relation || raw.projectRelation);
-  return {
+  const location = getLocation(locationId);
+  const item = {
     ...raw,
     id,
     sourcePath,
     refKey: `${sourcePath}/${id}`,
     locationId,
-    location: getLocation(locationId),
+    location,
     name: raw.name || "이름 없음",
     qty: Number.isFinite(Number(raw.qty)) ? Number(raw.qty) : 0,
     loc: raw.loc || raw.detailLocation || "",
@@ -582,6 +620,20 @@ function normalizeItem(id, sourcePath, raw) {
     img: raw.img || raw.image || null,
     updatedAt: raw.updatedAt || raw.createdAt || ""
   };
+  item.searchText = createItemSearchText(item);
+  return item;
+}
+
+function createItemSearchText(item) {
+  return [
+    item.name,
+    item.loc,
+    item.usage,
+    item.location.label,
+    hierarchyText(item.location),
+    getProject(item.project).label,
+    ...item.categories
+  ].join(" ").toLowerCase();
 }
 
 function normalizeLocationId(value) {
@@ -720,19 +772,54 @@ function isDefaultLocation(id) {
 }
 
 function normalizeLocationRecord(id, raw = {}, fallback = {}) {
-  const type = ["greenhouse", "lab", "common"].includes(raw.type || fallback.type) ? (raw.type || fallback.type) : "common";
+  const label = raw.label || fallback.label || id || "이름 없는 공간";
+  const major = cleanText(raw.major ?? raw.group ?? fallback.major ?? fallback.group) || "기타";
+  const middle = cleanText(raw.middle ?? fallback.middle) || "";
+  const minor = cleanText(raw.minor ?? fallback.minor) || "";
+  const inferredType = inferLocationType(`${major} ${middle} ${minor} ${label}`);
+  const type = ["greenhouse", "lab", "common"].includes(raw.type || fallback.type) ? (raw.type || fallback.type) : inferredType;
   const iconName = SVG[raw.icon || fallback.icon] ? (raw.icon || fallback.icon) : "location";
   return {
     ...fallback,
     ...raw,
     id,
-    label: raw.label || fallback.label || id || "이름 없는 공간",
-    group: raw.group || fallback.group || "사용자 추가",
+    label,
+    group: major,
+    major,
+    middle,
+    minor,
     type,
     icon: iconName,
     desc: raw.desc || fallback.desc || "사용자 추가 보관 공간",
     image: raw.image || raw.img || fallback.image || fallback.img || null
   };
+}
+
+function cleanText(value) {
+  return String(value ?? "").trim().replace(/권역$/u, "").trim();
+}
+
+function inferLocationType(value) {
+  const text = String(value || "");
+  if (/온실|greenhouse/i.test(text)) return "greenhouse";
+  if (/실험|랩|lab|hplc|공동기기|기기실|분석/i.test(text)) return "lab";
+  return "common";
+}
+
+function hierarchyParts(location) {
+  return [location?.major || location?.group, location?.middle, location?.minor]
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+function hierarchyText(location, fallback = "미분류 공간") {
+  const parts = hierarchyParts(location);
+  return parts.length ? parts.join(" › ") : fallback;
+}
+
+function locationOptionLabel(location) {
+  const sub = hierarchyParts(location).slice(1).join(" › ");
+  return sub ? `${sub} · ${location.label}` : location.label;
 }
 
 function getConfiguredLocations() {
@@ -779,8 +866,11 @@ function getLocation(id) {
   return {
     id: normalizedId,
     label: normalizedId || "기타",
-    group: "사용자 추가",
-    type: "common",
+    group: "기타",
+    major: "기타",
+    middle: "사용자 데이터",
+    minor: "",
+    type: inferLocationType(normalizedId),
     icon: "location",
     desc: "사용자 데이터에 존재하는 보관 장소"
   };
@@ -817,20 +907,11 @@ function itemMatchesFilters(item) {
     else if (state.projectFilter === "both" && item.project !== "both") return false;
   }
   if (!state.search) return true;
-  const haystack = [
-    item.name,
-    item.loc,
-    item.usage,
-    item.location.label,
-    item.location.group,
-    getProject(item.project).label,
-    ...item.categories
-  ].join(" ").toLowerCase();
-  return haystack.includes(state.search);
+  return item.searchText.includes(state.search);
 }
 
 function getFilteredItems() {
-  return getItems().filter(itemMatchesFilters).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  return getItems().filter(itemMatchesFilters);
 }
 
 function renderFilters() {
@@ -921,7 +1002,7 @@ function miniZone(location, count) {
   return `<button class="mini-zone zone-${escapeAttr(location.type)}" type="button" data-map-location="${escapeAttr(location.id)}">
     <span class="zone-icon">${icon(location.icon)}</span>
     <span class="zone-title">${escapeHtml(location.label)}</span>
-    <span class="zone-meta">${count}개 물품 · ${escapeHtml(location.group)}</span>
+    <span class="zone-meta">${count}개 물품 · ${escapeHtml(hierarchyText(location))}</span>
   </button>`;
 }
 
@@ -937,7 +1018,7 @@ function renderItems() {
 function itemCard(item) {
   const project = getProject(item.project);
   const media = item.img
-    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}">`
+    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}" loading="lazy" decoding="async">`
     : `<div class="card-placeholder" style="background:${placeholderGradient(item.name)}">${escapeHtml(firstChar(item.name))}</div>`;
   const tags = item.categories.length
     ? item.categories.slice(0, 4).map((category) => `<span class="tag-pill">${escapeHtml(category)}</span>`).join("")
@@ -966,6 +1047,17 @@ function renderSpaceMap() {
   const items = getItems();
   const counts = countBy(items, "locationId");
   const locations = getMapLocations();
+
+  if (els.mapSpaceTabs) {
+    els.mapSpaceTabs.innerHTML = locations.length
+      ? locations.map((location) => `<button class="space-tab-chip ${state.selectedMapLocation === location.id ? "active" : ""}" type="button" data-map-location="${escapeAttr(location.id)}">
+          <span class="space-tab-icon">${icon(location.icon)}</span>
+          <span>${escapeHtml(location.label)}</span>
+          <strong>${(counts.get(location.id) || 0).toLocaleString()}</strong>
+        </button>`).join("")
+      : `<div class="empty-note">공간이 없습니다.</div>`;
+  }
+
   els.spaceMap.innerHTML = locations.length ? locations.map((location) => {
     const count = counts.get(location.id) || 0;
     const active = state.selectedMapLocation === location.id;
@@ -977,10 +1069,11 @@ function renderSpaceMap() {
       <div class="map-zone-main">
         <div>
           <strong>${escapeHtml(location.label)}</strong>
-          <span>${escapeHtml(location.desc)}</span>
+          <span>${escapeHtml(hierarchyText(location))}</span>
         </div>
         <span class="map-zone-icon">${icon(location.icon)}</span>
       </div>
+      <div class="map-zone-desc">${escapeHtml(location.desc)}</div>
       <div class="map-zone-bottom">
         <span class="map-count">${count}</span>
         <span class="map-label">items</span>
@@ -993,11 +1086,11 @@ function renderMapDetail() {
   const location = getLocation(state.selectedMapLocation);
   const items = getItems().filter((item) => item.locationId === state.selectedMapLocation).sort((a, b) => a.name.localeCompare(b.name, "ko"));
   const locationPhoto = location.image
-    ? `<img class="map-detail-photo" src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진">`
+    ? `<img class="map-detail-photo" src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진" loading="lazy" decoding="async">`
     : `<div class="map-detail-photo placeholder">${icon("image")}<span>위치 사진 없음</span></div>`;
   els.mapDetailPanel.innerHTML = `<div class="map-detail-head">
       <div>
-        <span class="eyebrow">${escapeHtml(location.group)}</span>
+        <span class="eyebrow">${escapeHtml(hierarchyText(location))}</span>
         <h3>${escapeHtml(location.label)}</h3>
         <p class="map-detail-desc">${escapeHtml(location.desc)}</p>
       </div>
@@ -1014,7 +1107,7 @@ function renderMapDetail() {
 
 function compactItem(item) {
   const thumb = item.img
-    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}">`
+    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}" loading="lazy" decoding="async">`
     : escapeHtml(firstChar(item.name));
   return `<button class="compact-item" type="button" data-item-ref="${escapeAttr(item.refKey)}">
     <span class="compact-thumb" style="${item.img ? "" : `background:${placeholderGradient(item.name)}`}">${thumb}</span>
@@ -1079,7 +1172,18 @@ function renderAdminPanel() {
           ? "Firebase 연결을 준비하는 중입니다."
           : "Google 관리자 계정으로 로그인하면 편집 기능이 활성화됩니다.";
 
-  els.adminStatusPanel.innerHTML = `<div class="admin-status-card">
+  const itemsByLocation = items.reduce((acc, item) => {
+    if (!acc.has(item.locationId)) acc.set(item.locationId, []);
+    acc.get(item.locationId).push(item);
+    return acc;
+  }, new Map());
+  const locations = getAdminLocations();
+  if (!locations.some((location) => location.id === state.selectedAdminLocation)) {
+    state.selectedAdminLocation = locations.find((location) => !location.hidden)?.id || locations[0]?.id || "";
+  }
+  const selectedLocation = locations.find((location) => location.id === state.selectedAdminLocation) || locations[0] || null;
+
+  els.adminStatusPanel.innerHTML = `<div class="admin-status-card compact">
     <div class="admin-status-top">
       <span class="admin-status-icon">${icon(editable ? "shield" : "lock")}</span>
       <div>
@@ -1094,47 +1198,70 @@ function renderAdminPanel() {
       <span class="admin-pill">${icon("map")}${getConfiguredLocations().length}개 활성 공간</span>
       <span class="admin-pill">${icon("boxes")}${items.length}개 물품</span>
     </div>
-    <div class="admin-note">
-      관리자 이메일: ${adminEmails.length ? escapeHtml(adminEmails.join(", ")) : "현재 ADMIN_EMAILS가 비어 있어 테스트 편의상 Google 로그인 사용자를 관리자로 처리합니다."}<br>
-      실제 배포 시에는 app.js의 ADMIN_EMAILS와 Firebase Realtime Database 쓰기 규칙을 같은 관리자 이메일 기준으로 맞추는 것을 권장합니다.
+    <div class="admin-note compact-note">
+      관리자 이메일: ${adminEmails.length ? escapeHtml(adminEmails.join(", ")) : "ADMIN_EMAILS가 비어 있어 Google 로그인 사용자를 관리자로 처리합니다."}
+    </div>
+  </div>
+  <div class="admin-space-tab-panel">
+    <div class="admin-space-tab-head">
+      <span class="eyebrow">Spaces</span>
+      <strong>공간 탭</strong>
+    </div>
+    <div class="admin-space-tabs">
+      ${locations.length ? locations.map((location) => adminLocationTab(location, itemsByLocation.get(location.id) || [])).join("") : `<div class="empty-note">등록된 공간이 없습니다.</div>`}
     </div>
   </div>`;
 
-  const itemsByLocation = items.reduce((acc, item) => {
-    if (!acc.has(item.locationId)) acc.set(item.locationId, []);
-    acc.get(item.locationId).push(item);
-    return acc;
-  }, new Map());
-  const locations = getAdminLocations();
-  els.locationManageList.innerHTML = locations.length
-    ? locations.map((location) => locationManageCard(location, itemsByLocation.get(location.id) || [])).join("")
-    : `<div class="empty-note">등록된 공간이 없습니다.</div>`;
+  els.locationManageList.innerHTML = selectedLocation
+    ? locationManageDetail(selectedLocation, itemsByLocation.get(selectedLocation.id) || [])
+    : `<div class="empty-note">왼쪽에서 공간을 선택해주세요.</div>`;
 }
 
-function locationManageCard(location, locationItems) {
+function adminLocationTab(location, locationItems) {
+  const active = state.selectedAdminLocation === location.id;
+  const photo = location.image
+    ? `<span class="admin-space-tab-icon has-photo"><img src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진" loading="lazy" decoding="async"></span>`
+    : `<span class="admin-space-tab-icon">${icon(location.icon)}</span>`;
+  return `<button class="admin-space-tab ${active ? "active" : ""} ${location.hidden ? "is-hidden" : ""}" type="button" data-admin-location-tab="${escapeAttr(location.id)}">
+    ${photo}
+    <span class="admin-space-tab-main">
+      <strong>${escapeHtml(location.label)}</strong>
+      <em>${escapeHtml(hierarchyText(location))}</em>
+    </span>
+    <span class="admin-space-tab-count">${locationItems.length.toLocaleString()}</span>
+  </button>`;
+}
+
+function locationManageDetail(location, locationItems) {
   const count = locationItems.length;
-  const hiddenClass = location.hidden ? " is-hidden" : "";
   const kind = location.builtIn ? "기본" : "추가";
   const actions = location.hidden
     ? `<button class="btn primary small editable-only" type="button" data-restore-location="${escapeAttr(location.id)}">복구</button>`
-    : `<button class="btn ghost small editable-only" type="button" data-edit-location="${escapeAttr(location.id)}">수정</button>
-       <button class="btn danger small editable-only" type="button" data-delete-location="${escapeAttr(location.id)}">삭제</button>`;
+    : `<button class="btn ghost small editable-only" type="button" data-edit-location="${escapeAttr(location.id)}">공간 수정</button>
+       <button class="btn danger small editable-only" type="button" data-delete-location="${escapeAttr(location.id)}">공간 삭제</button>`;
   const photo = location.image
-    ? `<span class="location-manage-photo"><img src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진"></span>`
-    : `<span class="location-manage-icon">${icon(location.icon)}</span>`;
+    ? `<div class="location-detail-photo"><img src="${escapeAttr(location.image)}" alt="${escapeAttr(location.label)} 위치 사진" loading="lazy" decoding="async"></div>`
+    : `<div class="location-detail-photo placeholder">${icon(location.icon)}<span>위치 사진 없음</span></div>`;
   const itemList = count
-    ? `<div class="location-item-list">
-        ${locationItems.sort((a, b) => a.name.localeCompare(b.name, "ko")).map(adminLocationItem).join("")}
+    ? `<div class="location-item-list detail-list">
+        ${locationItems.map(adminLocationItem).join("")}
       </div>`
     : `<div class="location-item-list empty">등록된 물품이 없습니다.</div>`;
-  return `<article class="location-manage-card${hiddenClass}">
-    ${photo}
-    <div class="location-manage-main">
-      <strong>${escapeHtml(location.label)} <span class="location-kind-badge">${location.hidden ? "숨김" : kind}</span></strong>
-      <span>${escapeHtml(location.group)} · ${escapeHtml(location.desc)}</span>
+  return `<article class="location-manage-detail ${location.hidden ? "is-hidden" : ""}">
+    <div class="location-detail-head">
+      ${photo}
+      <div class="location-detail-main">
+        <span class="eyebrow">${escapeHtml(hierarchyText(location))}</span>
+        <h3>${escapeHtml(location.label)}</h3>
+        <p>${escapeHtml(location.desc)}</p>
+        <div class="admin-pill-row">
+          <span class="location-kind-badge">${location.hidden ? "숨김" : kind}</span>
+          <span class="location-count-badge">${count.toLocaleString()}개 물품</span>
+        </div>
+      </div>
     </div>
-    <div class="location-actions">
-      <span class="location-count-badge">${count.toLocaleString()}개 물품</span>
+    <div class="location-detail-actions">
+      <button class="btn ghost small" type="button" data-location-filter="${escapeAttr(location.id)}">이 공간 물품 보기</button>
       ${actions}
     </div>
     ${itemList}
@@ -1143,7 +1270,7 @@ function locationManageCard(location, locationItems) {
 
 function adminLocationItem(item) {
   const thumb = item.img
-    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}">`
+    ? `<img src="${escapeAttr(item.img)}" alt="${escapeAttr(item.name)}" loading="lazy" decoding="async">`
     : escapeHtml(firstChar(item.name));
   return `<button class="location-item-row" type="button" data-item-ref="${escapeAttr(item.refKey)}">
     <span class="location-item-thumb" style="${item.img ? "" : `background:${placeholderGradient(item.name)}`}">${thumb}</span>
@@ -1164,8 +1291,10 @@ function openLocationModal(location = null) {
   editingLocationId = location?.id || null;
   els.locationModalTitle.textContent = location ? "공간 수정" : "공간 추가";
   els.locationNameInput.value = location?.label || "";
-  els.locationGroupInput.value = location?.group || "기타";
-  els.locationTypeSelect.value = location?.type || "common";
+  els.locationGroupInput.value = location?.major || location?.group || "기타";
+  if (els.locationMiddleInput) els.locationMiddleInput.value = location?.middle || "";
+  if (els.locationSmallInput) els.locationSmallInput.value = location?.minor || "";
+  if (els.locationTypeSelect) els.locationTypeSelect.value = location?.type || inferLocationType(`${location?.major || location?.group || ""} ${location?.label || ""}`);
   els.locationIconSelect.value = location?.icon || "location";
   els.locationDescInput.value = location?.desc || "";
   tempLocationImageData = location?.image || "";
@@ -1173,6 +1302,20 @@ function openLocationModal(location = null) {
   renderLocationImagePreview(tempLocationImageData);
   openModal("locationModal");
   setTimeout(() => els.locationNameInput.focus(), 50);
+}
+
+function setButtonBusy(button, busy, label = "저장 중...") {
+  if (!button) return () => {};
+  const previousHtml = button.innerHTML;
+  const previousDisabled = button.disabled;
+  if (busy) {
+    button.disabled = true;
+    button.innerHTML = label;
+  }
+  return () => {
+    button.disabled = previousDisabled;
+    button.innerHTML = previousHtml;
+  };
 }
 
 async function saveLocation() {
@@ -1191,10 +1334,17 @@ async function saveLocation() {
   const id = editingLocationId || createLocationId(label);
   const now = new Date().toISOString();
   const previous = (settingsRaw.locations || {})[id] || {};
+  const major = els.locationGroupInput.value.trim() || "기타";
+  const middle = els.locationMiddleInput?.value.trim() || "";
+  const minor = els.locationSmallInput?.value.trim() || "";
+  const autoType = inferLocationType(`${major} ${middle} ${minor} ${label}`);
   const payload = {
     label,
-    group: els.locationGroupInput.value.trim() || "기타",
-    type: els.locationTypeSelect.value || "common",
+    group: major,
+    major,
+    middle,
+    minor,
+    type: autoType,
     icon: els.locationIconSelect.value || "location",
     desc: els.locationDescInput.value.trim() || "사용자 추가 보관 공간",
     image: tempLocationImageData || normalizedUrlValue(els.locationImageUrlInput.value) || null,
@@ -1204,16 +1354,21 @@ async function saveLocation() {
     updatedBy: currentUser?.email || ""
   };
 
+  const restoreSaveButton = setButtonBusy(els.saveLocationBtn, true);
   try {
     await dbSet(`settings/locations/${id}`, payload);
     await dbRemove(`settings/hiddenLocations/${id}`);
     settingsRaw.locations = { ...(settingsRaw.locations || {}), [id]: payload };
     if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[id];
+    invalidateCaches();
     state.selectedMapLocation = id;
+    state.selectedAdminLocation = id;
     closeModal("locationModal");
     renderAll();
   } catch (error) {
     showDialog("공간 저장 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
+  } finally {
+    restoreSaveButton();
   }
 }
 
@@ -1244,6 +1399,8 @@ async function deleteLocation(locationId) {
     }
     if (state.locationFilter === locationId) state.locationFilter = "all";
     if (state.selectedMapLocation === locationId) ensureSelectedLocation();
+    if (state.selectedAdminLocation === locationId) state.selectedAdminLocation = getAdminLocations().find((location) => !location.hidden)?.id || "";
+    invalidateCaches();
     renderAll();
   } catch (error) {
     showDialog("공간 삭제 실패", error.message || "Firebase 삭제 중 오류가 발생했습니다.", { alertOnly: true });
@@ -1259,7 +1416,9 @@ async function restoreLocation(locationId) {
   try {
     await dbRemove(`settings/hiddenLocations/${locationId}`);
     if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[locationId];
+    invalidateCaches();
     state.selectedMapLocation = locationId;
+    state.selectedAdminLocation = locationId;
     renderAll();
   } catch (error) {
     showDialog("공간 복구 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
@@ -1408,12 +1567,13 @@ function populateLocationSelect() {
   if (!els.itemLocationSelect) return;
   const previousValue = els.itemLocationSelect.value;
   const grouped = getAllLocationsFromData().reduce((acc, location) => {
-    if (!acc.has(location.group)) acc.set(location.group, []);
-    acc.get(location.group).push(location);
+    const groupLabel = location.major || location.group || "기타";
+    if (!acc.has(groupLabel)) acc.set(groupLabel, []);
+    acc.get(groupLabel).push(location);
     return acc;
   }, new Map());
   els.itemLocationSelect.innerHTML = [...grouped.entries()].map(([group, locations]) => `<optgroup label="${escapeAttr(group)}">
-    ${locations.map((location) => `<option value="${escapeAttr(location.id)}">${escapeHtml(location.label)}</option>`).join("")}
+    ${locations.map((location) => `<option value="${escapeAttr(location.id)}">${escapeHtml(locationOptionLabel(location))}</option>`).join("")}
   </optgroup>`).join("");
   if (previousValue && [...els.itemLocationSelect.options].some((option) => option.value === previousValue)) {
     els.itemLocationSelect.value = previousValue;
@@ -1516,7 +1676,7 @@ async function handleImageSelect(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
-    tempImageData = await readImageFile(file, 1000, 0.84);
+    tempImageData = await readImageFile(file, 720, 0.72);
     els.itemImageUrlInput.value = "";
     renderImagePreview(tempImageData);
   } catch (error) {
@@ -1530,7 +1690,7 @@ async function handleLocationImageSelect(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
-    tempLocationImageData = await readImageFile(file, 1400, 0.84);
+    tempLocationImageData = await readImageFile(file, 960, 0.74);
     els.locationImageUrlInput.value = "";
     renderLocationImagePreview(tempLocationImageData);
   } catch (error) {
@@ -1591,36 +1751,63 @@ function normalizedUrlValue(value) {
   return "";
 }
 
-function readImageFile(file, maxSize = 1000, quality = 0.84) {
+function preferredImageMime() {
+  if (webpSupported !== null) return webpSupported ? "image/webp" : "image/jpeg";
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    webpSupported = canvas.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch (_) {
+    webpSupported = false;
+  }
+  return webpSupported ? "image/webp" : "image/jpeg";
+}
+
+function readImageFile(file, maxSize = 720, quality = 0.72) {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith("image/")) {
       reject(new Error("이미지 파일만 업로드할 수 있습니다."));
       return;
     }
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
-    reader.onload = (readerEvent) => {
-      const image = new Image();
-      image.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
-      image.onload = () => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("이미지를 불러오지 못했습니다."));
+    };
+    image.onload = () => {
+      try {
         let { width, height } = image;
-        if (width > height && width > maxSize) {
-          height = Math.round(height * maxSize / width);
-          width = maxSize;
-        } else if (height >= width && height > maxSize) {
-          width = Math.round(width * maxSize / height);
-          height = maxSize;
-        }
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { alpha: false });
+        ctx.imageSmoothingQuality = "high";
         ctx.drawImage(image, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      image.src = readerEvent.target.result;
+
+        const mime = preferredImageMime();
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(objectUrl);
+          if (!blob) {
+            reject(new Error("이미지 압축에 실패했습니다."));
+            return;
+          }
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("압축 이미지를 읽지 못했습니다."));
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        }, mime, quality);
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
     };
-    reader.readAsDataURL(file);
+    image.src = objectUrl;
   });
 }
 
@@ -1667,6 +1854,7 @@ async function saveItem() {
   if (editingItem?.createdAt) payload.createdAt = editingItem.createdAt;
   else payload.createdAt = now;
 
+  const restoreSaveButton = setButtonBusy(els.saveItemBtn, true);
   try {
     if (editingItem && editingItem.sourcePath !== targetLocation) {
       await dbRemove(`inventory/${editingItem.sourcePath}/${editingItem.id}`);
@@ -1675,6 +1863,8 @@ async function saveItem() {
     closeModal("itemModal");
   } catch (error) {
     showDialog("저장 실패", error.message || "Firebase 저장 중 오류가 발생했습니다.", { alertOnly: true });
+  } finally {
+    restoreSaveButton();
   }
 }
 
