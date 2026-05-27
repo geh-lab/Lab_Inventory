@@ -39,6 +39,7 @@ const state = {
   locationFilter: "all",
   projectFilter: "all",
   categoryFilter: "all",
+  selectedMapMajor: "",
   selectedMapLocation: "greenhouse-storage",
   selectedAdminLocation: "greenhouse-storage",
   theme: localStorage.getItem("labInventoryTheme") || "dark"
@@ -122,6 +123,12 @@ const els = {
   locationGroupInput: document.getElementById("locationGroupInput"),
   locationMiddleInput: document.getElementById("locationMiddleInput"),
   locationSmallInput: document.getElementById("locationSmallInput"),
+  locationMajorSuggestions: document.getElementById("locationMajorSuggestions"),
+  locationMiddleSuggestions: document.getElementById("locationMiddleSuggestions"),
+  locationMinorSuggestions: document.getElementById("locationMinorSuggestions"),
+  locationMajorChips: document.getElementById("locationMajorChips"),
+  locationMiddleChips: document.getElementById("locationMiddleChips"),
+  locationMinorChips: document.getElementById("locationMinorChips"),
   locationTypeSelect: document.getElementById("locationTypeSelect"),
   locationIconSelect: document.getElementById("locationIconSelect"),
   locationDescInput: document.getElementById("locationDescInput"),
@@ -217,6 +224,10 @@ function bindEvents() {
   els.addCategoryBtn.addEventListener("click", addCategoryFromInput);
   els.categoryChecklist.addEventListener("change", handleCategoryToggle);
   els.saveLocationBtn.addEventListener("click", saveLocation);
+  [els.locationGroupInput, els.locationMiddleInput, els.locationSmallInput].forEach((input) => {
+    input?.addEventListener("input", updateLocationHierarchyOptions);
+    input?.addEventListener("focus", updateLocationHierarchyOptions);
+  });
   els.customCategoryInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -265,9 +276,20 @@ function bindEvents() {
       if (item) openItemModal(item);
     }
 
+    const mapMajorBtn = event.target.closest("[data-map-major]");
+    if (mapMajorBtn) {
+      state.selectedMapMajor = mapMajorBtn.dataset.mapMajor || "";
+      ensureSelectedLocation();
+      setView("map");
+      renderSpaceMap();
+      renderMapDetail();
+    }
+
     const mapZone = event.target.closest("[data-map-location]");
     if (mapZone) {
       state.selectedMapLocation = mapZone.dataset.mapLocation;
+      const selectedLocation = getLocation(state.selectedMapLocation);
+      state.selectedMapMajor = locationMajorValue(selectedLocation);
       setView("map");
       renderSpaceMap();
       renderMapDetail();
@@ -299,6 +321,11 @@ function bindEvents() {
 
     const restoreLocationBtn = event.target.closest("[data-restore-location]");
     if (restoreLocationBtn) restoreLocation(restoreLocationBtn.dataset.restoreLocation);
+
+    const hierarchyBtn = event.target.closest("[data-location-hierarchy-field]");
+    if (hierarchyBtn) {
+      applyLocationHierarchySuggestion(hierarchyBtn.dataset.locationHierarchyField, hierarchyBtn.dataset.locationHierarchyValue || "");
+    }
 
     const qtyBtn = event.target.closest("[data-qty-delta]");
     if (qtyBtn) {
@@ -806,8 +833,112 @@ function inferLocationType(value) {
   return "common";
 }
 
+function locationMajorValue(location) {
+  return cleanText(location?.major ?? location?.group ?? "") || "기타";
+}
+
+function locationMiddleValue(location) {
+  return cleanText(location?.middle ?? "");
+}
+
+function locationMinorValue(location) {
+  return cleanText(location?.minor ?? "");
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values.map(cleanText).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+}
+
+function getLocationMajorGroups(locations = getAllLocationsFromData(), items = getItems()) {
+  const counts = countBy(items, "locationId");
+  const groups = new Map();
+  locations.forEach((location) => {
+    const label = locationMajorValue(location);
+    if (!groups.has(label)) {
+      groups.set(label, {
+        id: normalizeLocationKey(label) || "major",
+        label,
+        icon: location.icon || "map",
+        type: location.type || inferLocationType(label),
+        itemCount: 0,
+        locationCount: 0,
+        locations: []
+      });
+    }
+    const group = groups.get(label);
+    group.locations.push(location);
+    group.locationCount += 1;
+    group.itemCount += counts.get(location.id) || 0;
+  });
+
+  return [...groups.values()].sort((a, b) => {
+    const firstA = a.locations[0];
+    const firstB = b.locations[0];
+    const order = sortLocations(firstA, firstB);
+    return order || a.label.localeCompare(b.label, "ko");
+  });
+}
+
+function ensureSelectedMapMajor(groups = null) {
+  const sourceGroups = groups || getLocationMajorGroups();
+  if (!sourceGroups.length) {
+    state.selectedMapMajor = "";
+    return "";
+  }
+  if (!sourceGroups.some((group) => group.label === state.selectedMapMajor)) {
+    state.selectedMapMajor = sourceGroups[0].label;
+  }
+  return state.selectedMapMajor;
+}
+
+function getHierarchySuggestionLists({ major = "", middle = "" } = {}) {
+  const locations = getAdminLocations();
+  const selectedMajor = cleanText(major);
+  const selectedMiddle = cleanText(middle);
+  const majors = uniqueSorted(locations.map(locationMajorValue));
+  const majorScoped = selectedMajor ? locations.filter((location) => locationMajorValue(location) === selectedMajor) : locations;
+  const middles = uniqueSorted(majorScoped.map(locationMiddleValue));
+  const middleScoped = selectedMiddle
+    ? majorScoped.filter((location) => locationMiddleValue(location) === selectedMiddle)
+    : majorScoped;
+  const minors = uniqueSorted(middleScoped.map(locationMinorValue));
+  return { majors, middles, minors };
+}
+
+function populateDatalist(datalist, values) {
+  if (!datalist) return;
+  datalist.innerHTML = values.map((value) => `<option value="${escapeAttr(value)}"></option>`).join("");
+}
+
+function renderHierarchyChips(container, values, fieldName) {
+  if (!container) return;
+  container.innerHTML = values.length
+    ? values.slice(0, 18).map((value) => `<button class="hierarchy-suggestion-chip" type="button" data-location-hierarchy-field="${escapeAttr(fieldName)}" data-location-hierarchy-value="${escapeAttr(value)}">${escapeHtml(value)}</button>`).join("")
+    : `<span class="hierarchy-empty">기존 목록 없음</span>`;
+}
+
+function updateLocationHierarchyOptions() {
+  const major = els.locationGroupInput?.value || "";
+  const middle = els.locationMiddleInput?.value || "";
+  const { majors, middles, minors } = getHierarchySuggestionLists({ major, middle });
+  populateDatalist(els.locationMajorSuggestions, majors);
+  populateDatalist(els.locationMiddleSuggestions, middles);
+  populateDatalist(els.locationMinorSuggestions, minors);
+  renderHierarchyChips(els.locationMajorChips, majors, "major");
+  renderHierarchyChips(els.locationMiddleChips, middles, "middle");
+  renderHierarchyChips(els.locationMinorChips, minors, "minor");
+}
+
+function applyLocationHierarchySuggestion(field, value) {
+  if (!value) return;
+  if (field === "major" && els.locationGroupInput) els.locationGroupInput.value = value;
+  if (field === "middle" && els.locationMiddleInput) els.locationMiddleInput.value = value;
+  if (field === "minor" && els.locationSmallInput) els.locationSmallInput.value = value;
+  updateLocationHierarchyOptions();
+}
+
 function hierarchyParts(location) {
-  return [location?.major || location?.group, location?.middle, location?.minor]
+  return [locationMajorValue(location), locationMiddleValue(location), locationMinorValue(location)]
     .map(cleanText)
     .filter(Boolean);
 }
@@ -884,7 +1015,10 @@ function getAllLocationsFromData() {
 }
 
 function getMapLocations() {
-  return getAllLocationsFromData();
+  const locations = getAllLocationsFromData();
+  const groups = getLocationMajorGroups(locations);
+  const selectedMajor = ensureSelectedMapMajor(groups);
+  return selectedMajor ? locations.filter((location) => locationMajorValue(location) === selectedMajor) : locations;
 }
 
 function ensureSelectedLocation() {
@@ -1046,16 +1180,23 @@ function itemCard(item) {
 function renderSpaceMap() {
   const items = getItems();
   const counts = countBy(items, "locationId");
-  const locations = getMapLocations();
+  const allLocations = getAllLocationsFromData();
+  const majorGroups = getLocationMajorGroups(allLocations, items);
+  const selectedMajor = ensureSelectedMapMajor(majorGroups);
+  const locations = selectedMajor ? allLocations.filter((location) => locationMajorValue(location) === selectedMajor) : allLocations;
+
+  if (!locations.some((location) => location.id === state.selectedMapLocation)) {
+    state.selectedMapLocation = locations[0]?.id || "etc";
+  }
 
   if (els.mapSpaceTabs) {
-    els.mapSpaceTabs.innerHTML = locations.length
-      ? locations.map((location) => `<button class="space-tab-chip ${state.selectedMapLocation === location.id ? "active" : ""}" type="button" data-map-location="${escapeAttr(location.id)}">
-          <span class="space-tab-icon">${icon(location.icon)}</span>
-          <span>${escapeHtml(location.label)}</span>
-          <strong>${(counts.get(location.id) || 0).toLocaleString()}</strong>
+    els.mapSpaceTabs.innerHTML = majorGroups.length
+      ? majorGroups.map((group) => `<button class="space-tab-chip ${state.selectedMapMajor === group.label ? "active" : ""}" type="button" data-map-major="${escapeAttr(group.label)}" title="${escapeAttr(group.label)} 대분류">
+          <span class="space-tab-icon">${icon(group.icon)}</span>
+          <span>${escapeHtml(group.label)}</span>
+          <strong>${group.itemCount.toLocaleString()}</strong>
         </button>`).join("")
-      : `<div class="empty-note">공간이 없습니다.</div>`;
+      : `<div class="empty-note">대분류가 없습니다. 관리자 화면에서 공간을 추가해주세요.</div>`;
   }
 
   els.spaceMap.innerHTML = locations.length ? locations.map((location) => {
@@ -1079,10 +1220,10 @@ function renderSpaceMap() {
         <span class="map-label">items</span>
       </div>
     </button>`;
-  }).join("") : `<div class="empty-note">등록된 공간이 없습니다. 관리자 화면에서 공간을 추가해주세요.</div>`;
+  }).join("") : `<div class="empty-note">이 대분류에 등록된 공간이 없습니다. 관리자 화면에서 공간을 추가해주세요.</div>`;
 }
-
 function renderMapDetail() {
+  ensureSelectedLocation();
   const location = getLocation(state.selectedMapLocation);
   const items = getItems().filter((item) => item.locationId === state.selectedMapLocation).sort((a, b) => a.name.localeCompare(b.name, "ko"));
   const locationPhoto = location.image
@@ -1291,7 +1432,7 @@ function openLocationModal(location = null) {
   editingLocationId = location?.id || null;
   els.locationModalTitle.textContent = location ? "공간 수정" : "공간 추가";
   els.locationNameInput.value = location?.label || "";
-  els.locationGroupInput.value = location?.major || location?.group || "기타";
+  els.locationGroupInput.value = location?.major || location?.group || state.selectedMapMajor || "기타";
   if (els.locationMiddleInput) els.locationMiddleInput.value = location?.middle || "";
   if (els.locationSmallInput) els.locationSmallInput.value = location?.minor || "";
   if (els.locationTypeSelect) els.locationTypeSelect.value = location?.type || inferLocationType(`${location?.major || location?.group || ""} ${location?.label || ""}`);
@@ -1300,6 +1441,7 @@ function openLocationModal(location = null) {
   tempLocationImageData = location?.image || "";
   els.locationImageUrlInput.value = tempLocationImageData && !String(tempLocationImageData).startsWith("data:") ? tempLocationImageData : "";
   renderLocationImagePreview(tempLocationImageData);
+  updateLocationHierarchyOptions();
   openModal("locationModal");
   setTimeout(() => els.locationNameInput.focus(), 50);
 }
@@ -1334,9 +1476,9 @@ async function saveLocation() {
   const id = editingLocationId || createLocationId(label);
   const now = new Date().toISOString();
   const previous = (settingsRaw.locations || {})[id] || {};
-  const major = els.locationGroupInput.value.trim() || "기타";
-  const middle = els.locationMiddleInput?.value.trim() || "";
-  const minor = els.locationSmallInput?.value.trim() || "";
+  const major = cleanText(els.locationGroupInput.value) || "기타";
+  const middle = cleanText(els.locationMiddleInput?.value) || "";
+  const minor = cleanText(els.locationSmallInput?.value) || "";
   const autoType = inferLocationType(`${major} ${middle} ${minor} ${label}`);
   const payload = {
     label,
@@ -1361,6 +1503,7 @@ async function saveLocation() {
     settingsRaw.locations = { ...(settingsRaw.locations || {}), [id]: payload };
     if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[id];
     invalidateCaches();
+    state.selectedMapMajor = major;
     state.selectedMapLocation = id;
     state.selectedAdminLocation = id;
     closeModal("locationModal");
@@ -1401,6 +1544,8 @@ async function deleteLocation(locationId) {
     if (state.selectedMapLocation === locationId) ensureSelectedLocation();
     if (state.selectedAdminLocation === locationId) state.selectedAdminLocation = getAdminLocations().find((location) => !location.hidden)?.id || "";
     invalidateCaches();
+    ensureSelectedMapMajor();
+    ensureSelectedLocation();
     renderAll();
   } catch (error) {
     showDialog("공간 삭제 실패", error.message || "Firebase 삭제 중 오류가 발생했습니다.", { alertOnly: true });
@@ -1417,6 +1562,7 @@ async function restoreLocation(locationId) {
     await dbRemove(`settings/hiddenLocations/${locationId}`);
     if (settingsRaw.hiddenLocations) delete settingsRaw.hiddenLocations[locationId];
     invalidateCaches();
+    state.selectedMapMajor = locationMajorValue(getLocation(locationId));
     state.selectedMapLocation = locationId;
     state.selectedAdminLocation = locationId;
     renderAll();
@@ -1567,7 +1713,7 @@ function populateLocationSelect() {
   if (!els.itemLocationSelect) return;
   const previousValue = els.itemLocationSelect.value;
   const grouped = getAllLocationsFromData().reduce((acc, location) => {
-    const groupLabel = location.major || location.group || "기타";
+    const groupLabel = locationMajorValue(location);
     if (!acc.has(groupLabel)) acc.set(groupLabel, []);
     acc.get(groupLabel).push(location);
     return acc;

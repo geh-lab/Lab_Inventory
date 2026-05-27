@@ -1859,3 +1859,121 @@ body.theme-light .map-detail-panel,
 body.theme-light .modal-card {
   scrollbar-color: #cbd5e1 transparent;
 }
+
+/* 2026-05-29: 공간 계층 대분류 탭 + 기존 계층 재사용 UI */
+.hierarchy-helper.full { grid-column: 1 / -1; }
+.hierarchy-helper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, .28);
+}
+.hierarchy-helper-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hierarchy-helper-head strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: -0.03em;
+}
+.hierarchy-helper-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.hierarchy-helper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.hierarchy-helper-grid section {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, .12);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, .20);
+}
+.hierarchy-helper-grid section > span {
+  color: #67e8f9;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.hierarchy-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 92px;
+  overflow: auto;
+}
+.hierarchy-suggestion-chip {
+  min-height: 28px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid rgba(56, 189, 248, .24);
+  border-radius: 999px;
+  color: #e0f2fe;
+  background: rgba(14, 165, 233, .10);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hierarchy-suggestion-chip:hover {
+  border-color: rgba(56, 189, 248, .50);
+  background: rgba(14, 165, 233, .18);
+}
+.hierarchy-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.space-tab-chip { max-width: 240px; }
+.space-tab-chip > span:not(.space-tab-icon) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.theme-light .hierarchy-helper {
+  background: rgba(248, 250, 252, .74);
+  border-color: rgba(15, 23, 42, .10);
+}
+body.theme-light .hierarchy-helper-head strong { color: #0f172a; }
+body.theme-light .hierarchy-helper-head span { color: #64748b; }
+body.theme-light .hierarchy-helper-grid section {
+  background: rgba(255, 255, 255, .72);
+  border-color: rgba(15, 23, 42, .08);
+}
+body.theme-light .hierarchy-helper-grid section > span { color: #0369a1; }
+body.theme-light .hierarchy-suggestion-chip {
+  color: #075985;
+  background: #e0f2fe;
+  border-color: #bae6fd;
+}
+body.theme-light .hierarchy-suggestion-chip:hover {
+  background: #bae6fd;
+  border-color: #7dd3fc;
+}
+body.theme-light .hierarchy-empty { color: #64748b; }
+@media (max-width: 760px) {
+  .hierarchy-helper-grid { grid-template-columns: 1fr; }
+  .hierarchy-chip-list { max-height: 120px; }
+}
