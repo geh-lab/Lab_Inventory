@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Lab Inventory Dashboard</title>
   <link rel="stylesheet" href="./styles.css?v=light-patch-applied-20260528" />
+  <link rel="stylesheet" href="./styles.mobile.patch.css?v=20260528b" />
 </head>
 <body class="sidebar-open view-dashboard">
   <div class="ambient-bg" aria-hidden="true">
@@ -12,6 +13,10 @@
     <span class="orb orb-b"></span>
     <span class="orb orb-c"></span>
   </div>
+
+  <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" type="button" aria-label="메뉴 열기" aria-expanded="false">
+    <span data-icon="panel"></span>
+  </button>
 
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
@@ -445,5 +450,6 @@
 
   <script src="./ui-fallback.js?v=perf-hierarchy-admin-fix-20260527"></script>
   <script defer src="./app.js?v=perf-hierarchy-admin-fix-20260527"></script>
+  <script defer src="./mobile-drawer.js?v=20260528b"></script>
 </body>
 </html>

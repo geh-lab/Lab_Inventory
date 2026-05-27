@@ -1,0 +1,303 @@
+
+/* =====================================================================
+   2026-05-28 Mobile Patch — 모바일 네비, 가독성, 레이아웃 보정
+   styles.css 가장 마지막에 추가 (또는 styles.patch.css 다음에 로드)
+   ===================================================================== */
+
+/* ---- 0. 한국어 단어 깨짐 방지 ---- */
+body { word-break: keep-all; overflow-wrap: anywhere; }
+.card-title, .map-zone-main strong, .compact-main strong,
+.location-item-main strong, .admin-space-tab-main strong,
+.modal-head h2, .dialog-card h2, .page-title-block h1,
+.content-head h2, .panel-head h3 { word-break: keep-all; }
+
+/* ---- 1. 상단바 / 검색 / 액션 줄바꿈 안정화 ---- */
+.topbar { flex-wrap: wrap; row-gap: 12px; }
+.page-title-block { min-width: 0; flex: 1 1 200px; }
+.page-title-block h1 { overflow-wrap: anywhere; }
+.top-actions { flex-wrap: wrap; row-gap: 8px; }
+.global-search { min-width: 0; }
+.global-search input { min-width: 0; }
+
+/* ---- 2. 모바일 (≤860px): 사이드바를 슬라이드 드로어로 ---- */
+@media (max-width: 860px) {
+  /* 사이드바 자체는 항상 렌더링하되 화면 밖으로 빼둠 */
+  .sidebar {
+    display: flex !important;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(280px, 84vw) !important;
+    padding: 18px !important;
+    border-radius: 0 22px 22px 0;
+    transform: translateX(-100%);
+    transition: transform .26s var(--ease);
+    z-index: 80;
+    overflow-y: auto;
+  }
+  /* sidebar-open 상태에서만 슬라이드 인 */
+  body.sidebar-open .sidebar { transform: translateX(0); }
+  body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
+
+  /* 드로어 모드에서는 라벨/브랜드 카피를 다시 보이게 */
+  .brand-copy { display: flex !important; opacity: 1 !important; width: auto !important; }
+  .nav-label { display: inline-flex !important; opacity: 1 !important; width: auto !important; }
+  .auth-mini-copy { display: flex !important; }
+  .sidebar-theme-label { display: inline !important; }
+  .nav-item { justify-content: flex-start !important; padding: 0 14px !important; }
+  body.sidebar-collapsed .sidebar-theme-btn { width: 100% !important; padding: 0 14px !important; margin-inline: 0 !important; }
+  body.sidebar-collapsed .auth-mini { justify-content: flex-start !important; padding: 12px !important; }
+
+  /* 햄버거 토글을 사이드바 밖에서도 보이도록 fixed 처리 */
+  .sidebar-toggle {
+    display: grid !important;
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    right: auto;
+    width: 44px;
+    height: 44px;
+    z-index: 90;
+    background: rgba(15, 23, 42, .96);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 10px 24px rgba(0,0,0,.3);
+  }
+  body.theme-light .sidebar-toggle {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, .14);
+    color: #0f172a;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .12);
+  }
+  /* 드로어가 열렸을 때 햄버거를 드로어 안쪽 우상단으로 이동 */
+  body.sidebar-open .sidebar-toggle {
+    left: calc(min(280px, 84vw) - 56px);
+  }
+  body.sidebar-open .sidebar-toggle svg { transform: rotate(180deg); }
+  body.sidebar-collapsed .sidebar-toggle svg { transform: none; }
+
+  /* 백드롭 */
+  body.sidebar-open::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, .56);
+    backdrop-filter: blur(2px);
+    z-index: 70;
+  }
+  body.theme-light.sidebar-open::before {
+    background: rgba(15, 23, 42, .42);
+  }
+
+  /* 메인 패널은 좌측 마진 제거, 햄버거 자리 확보 위해 상단 패딩 */
+  .main-panel,
+  body.sidebar-collapsed .main-panel {
+    margin-left: 0 !important;
+    padding: 16px 14px 60px !important;
+  }
+  .topbar { padding-left: 68px !important; }
+}
+
+/* ---- 3. 모바일 (≤620px): 한 열 레이아웃 + 작은 디테일 ---- */
+@media (max-width: 620px) {
+  :root { --radius-xl: 22px; --radius-lg: 18px; }
+
+  .topbar {
+    position: static;
+    border-radius: 20px;
+    padding: 14px 16px 14px 64px !important;
+    min-height: 64px;
+  }
+  .top-actions { width: 100%; }
+  .top-actions .btn { flex: 1 1 auto; min-width: 0; padding: 0 10px; }
+  .global-search { flex: 1 1 100%; height: 44px; }
+
+  .hero-panel { padding: 22px; }
+  .hero-panel h2 { font-size: clamp(22px, 7vw, 30px); }
+  .hero-actions .btn { flex: 1 1 auto; }
+
+  .stat-grid, .mini-map, .item-grid, .category-board { grid-template-columns: 1fr !important; }
+  .filter-row { grid-template-columns: 1fr; gap: 6px; padding: 6px 0; }
+  .filter-label { padding-top: 0; font-size: 12px; }
+  .chip-bar { gap: 6px; }
+  .chip { min-height: 34px; padding: 0 11px; font-size: 12px; }
+
+  .space-map { grid-template-columns: 1fr !important; padding: 12px; gap: 10px; }
+  .map-zone { grid-column: auto !important; min-height: 124px; padding: 14px; }
+  .map-zone-main strong { font-size: 16px; }
+
+  /* 카드 미디어 높이/타이틀 */
+  .item-card .card-media { height: 170px; }
+  .card-title { font-size: 18px; }
+
+  /* 모달: 풀 하단 시트 형태 */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh;
+    border-radius: 22px 22px 0 0;
+  }
+  .modal-head, .modal-body, .modal-footer { padding: 16px !important; }
+  .modal-head h2 { font-size: 18px; }
+  .item-modal-body { grid-template-columns: 1fr !important; gap: 14px; }
+  .image-frame { aspect-ratio: 4 / 3; }
+  .form-grid { grid-template-columns: 1fr !important; }
+  .segmented { grid-template-columns: repeat(3, 1fr); }
+  .segmented span { min-height: 42px; font-size: 12px; }
+  .modal-footer { flex-wrap: wrap; gap: 8px; }
+  .modal-footer .btn { flex: 1 1 auto; min-width: 0; }
+  .footer-spacer { flex: 1 1 100%; display: none; }
+
+  /* 관리자 / 공간 상세 */
+  .location-detail-head { grid-template-columns: 1fr !important; gap: 12px; }
+  .location-item-list { grid-template-columns: 1fr; max-height: 280px; }
+  .admin-space-tabs { max-height: 40vh; }
+
+  /* 다이얼로그 */
+  .dialog-card { width: min(420px, 94vw); margin: auto 8px 8px; border-radius: 22px; }
+  .dialog-actions { flex-direction: column-reverse; }
+  .dialog-actions .btn { width: 100%; }
+
+  /* FAB 위치 — 햄버거와 겹치지 않게 우측 하단 */
+  .theme-fab { right: 14px; bottom: 14px; }
+
+  /* 자그마한 글자 가독성 */
+  .card-info-row span { font-size: 12px; }
+  .card-desc { font-size: 11.5px; line-height: 1.5; }
+  .compact-main strong { font-size: 13px; }
+  .compact-main span { font-size: 11px; }
+
+  /* 상단 검색 아이콘이 잘리지 않도록 */
+  .global-search { padding: 0 12px; }
+  .global-search span svg { width: 18px; height: 18px; }
+}
+
+/* ---- 4. 아주 좁은 화면 (≤380px) 추가 보정 ---- */
+@media (max-width: 380px) {
+  .page-title-block h1 { font-size: 20px; }
+  .eyebrow { font-size: 10px; }
+  .modal-head h2 { font-size: 16px; }
+  .hero-panel h2 { font-size: 22px; }
+  .btn { padding: 0 12px; font-size: 13px; min-height: 42px; }
+  .icon-btn { width: 38px; height: 38px; }
+  .map-zone-icon, .zone-icon { width: 36px; height: 36px; }
+  .stat-value { font-size: 26px; }
+}
+
+/* ---- 5. iOS 안전영역(노치) 대응 ---- */
+@supports (padding: env(safe-area-inset-bottom)) {
+  @media (max-width: 620px) {
+    .main-panel { padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important; }
+    .theme-fab { bottom: calc(14px + env(safe-area-inset-bottom)); }
+    .sidebar-toggle { top: calc(16px + env(safe-area-inset-top)); }
+    .topbar { padding-top: calc(14px + env(safe-area-inset-top)) !important; }
+  }
+}
+
+/* ---- 6. 가로 스크롤 방지 (가장 흔한 모바일 깨짐 원인) ---- */
+html, body { max-width: 100%; overflow-x: hidden; }
+.modal-card, .panel, .item-card, .map-zone, .admin-space-tab,
+.compact-item, .location-item-row, .stat-card, .category-card { min-width: 0; }
+img { max-width: 100%; height: auto; }
+
+/* ---- 7. 사이드바 스크롤 (드로어가 짧은 화면일 때) ---- */
+.sidebar { overscroll-behavior: contain; }
+
+/* ---- 8. 다크/라이트 공통 — 모바일 드로어 안 검색 입력은 제외 ---- */
+@media (max-width: 860px) {
+  .sidebar .auth-mini { width: 100%; }
+}
+
+/* =====================================================================
+   Mobile Drawer Hardening — 햄버거 버튼을 사이드바 밖 독립 버튼으로 보정
+   기존 .sidebar 내부 버튼은 부모 transform 영향으로 함께 밀릴 수 있으므로
+   #mobileSidebarToggle을 별도 fixed 버튼으로 사용합니다.
+   ===================================================================== */
+.mobile-sidebar-toggle { display: none; }
+
+@media (max-width: 860px) {
+  body:not(.mobile-drawer-ready) .sidebar {
+    transform: translateX(-100%) !important;
+  }
+  body:not(.mobile-drawer-ready)::before {
+    content: none !important;
+  }
+
+  .sidebar .sidebar-toggle {
+    display: none !important;
+  }
+
+  .mobile-sidebar-toggle {
+    display: grid !important;
+    place-items: center;
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    background: rgba(15, 23, 42, .96);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .30);
+    z-index: 95;
+    cursor: pointer;
+    transition: left .26s var(--ease), transform .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease);
+  }
+
+  .mobile-sidebar-toggle svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+
+  .mobile-sidebar-toggle:hover {
+    transform: translateY(-1px);
+  }
+
+  .mobile-sidebar-toggle:focus-visible {
+    outline: 3px solid rgba(14, 165, 233, .35);
+    outline-offset: 3px;
+  }
+
+  body.theme-light .mobile-sidebar-toggle {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, .14);
+    color: #0f172a;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .12);
+  }
+
+  body.sidebar-open .mobile-sidebar-toggle {
+    left: calc(min(280px, 84vw) - 56px);
+  }
+
+  body.sidebar-open .mobile-sidebar-toggle svg {
+    transform: rotate(180deg);
+  }
+}
+
+@media (max-width: 620px) {
+  .mobile-sidebar-toggle {
+    top: 14px;
+    left: 14px;
+  }
+  body.sidebar-open .mobile-sidebar-toggle {
+    left: calc(min(280px, 84vw) - 54px);
+  }
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+  @media (max-width: 860px) {
+    .mobile-sidebar-toggle {
+      top: calc(16px + env(safe-area-inset-top));
+    }
+  }
+  @media (max-width: 620px) {
+    .mobile-sidebar-toggle {
+      top: calc(14px + env(safe-area-inset-top));
+    }
+  }
+}
+
+@media (min-width: 861px) {
+  .mobile-sidebar-toggle { display: none !important; }
+}
