@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Lab Inventory Dashboard</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=light-patch-applied-20260528" />
 </head>
 <body class="sidebar-open view-dashboard">
   <div class="ambient-bg" aria-hidden="true">
@@ -183,11 +183,7 @@
 
         <div class="map-layout">
           <article class="panel map-panel">
-            <div class="map-legend">
-              <span><i class="legend-dot greenhouse"></i>온실권역</span>
-              <span><i class="legend-dot lab"></i>실험실권역</span>
-              <span><i class="legend-dot common"></i>공용/기타</span>
-            </div>
+            <div class="map-space-tabs" id="mapSpaceTabs" aria-label="공간 빠른 선택"></div>
             <div class="space-map" id="spaceMap"></div>
           </article>
           <aside class="panel map-detail-panel" id="mapDetailPanel"></aside>
@@ -374,23 +370,32 @@
             <input id="locationNameInput" type="text" placeholder="예: 배양실 / 시료보관실" />
           </label>
           <label class="field">
-            <span>권역</span>
-            <input id="locationGroupInput" type="text" placeholder="예: 실험실권역 / 온실권역" list="locationGroupSuggestions" />
-            <datalist id="locationGroupSuggestions">
-              <option value="온실권역"></option>
-              <option value="실험실권역"></option>
-              <option value="공용/관리"></option>
-              <option value="외부/협력"></option>
+            <span>대분류</span>
+            <input id="locationGroupInput" type="text" placeholder="예: 실험실 / 온실 / 사무실" list="locationMajorSuggestions" />
+            <datalist id="locationMajorSuggestions">
+              <option value="온실"></option>
+              <option value="실험실"></option>
+              <option value="사무실"></option>
+              <option value="공동기기실"></option>
+              <option value="외부"></option>
               <option value="건물"></option>
               <option value="기타"></option>
             </datalist>
           </label>
           <label class="field">
-            <span>지도 색상 그룹</span>
-            <select id="locationTypeSelect">
-              <option value="greenhouse">온실권역</option>
-              <option value="lab">실험실권역</option>
-              <option value="common">공용/기타</option>
+            <span>중분류</span>
+            <input id="locationMiddleInput" type="text" placeholder="예: 창고 / 분석실 / 2층" />
+          </label>
+          <label class="field">
+            <span>소분류</span>
+            <input id="locationSmallInput" type="text" placeholder="예: A선반 / HPLC 구역 / 시약장" />
+          </label>
+          <label class="field hidden-field" aria-hidden="true">
+            <span>내부 색상값</span>
+            <select id="locationTypeSelect" tabindex="-1">
+              <option value="greenhouse">온실</option>
+              <option value="lab">실험실</option>
+              <option value="common">기타</option>
             </select>
           </label>
           <label class="field">
@@ -438,7 +443,7 @@
     <strong id="themeFabText">라이트</strong>
   </button>
 
-  <script src="./ui-fallback.js?v=click-theme-fix-20260526"></script>
-  <script defer src="./app.js?v=click-theme-fix-20260526"></script>
+  <script src="./ui-fallback.js?v=perf-hierarchy-admin-fix-20260527"></script>
+  <script defer src="./app.js?v=perf-hierarchy-admin-fix-20260527"></script>
 </body>
 </html>

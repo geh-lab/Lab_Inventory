@@ -1,0 +1,318 @@
+
+/* =====================================================================
+   2026-05-28 Patch — Light Mode 가독성 / 삭제 버튼 / 공간 색상 보정
+   본 블록은 styles.css 의 가장 마지막에 추가되어 기존 규칙을 덮어씁니다.
+   ===================================================================== */
+
+/* ---- 1. Danger(삭제) 버튼: 라이트/다크 공통 가독성 강화 ---- */
+.btn.danger {
+  background: rgba(239, 68, 68, .16);
+  border-color: rgba(248, 113, 113, .42);
+  color: #fecaca;
+}
+.btn.danger svg { color: currentColor; opacity: .95; }
+.btn.danger:hover {
+  background: rgba(239, 68, 68, .26);
+  border-color: rgba(248, 113, 113, .62);
+  color: #fff;
+}
+
+body.theme-light .btn.danger,
+body.theme-light .btn.danger.small {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, .22);
+}
+body.theme-light .btn.danger:hover,
+body.theme-light .btn.danger.small:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important;
+  box-shadow: 0 8px 20px rgba(185, 28, 28, .28);
+}
+body.theme-light .btn.danger svg,
+body.theme-light .btn.danger.small svg { color: #ffffff !important; opacity: 1; }
+
+/* 카테고리 카드의 "삭제" 텍스트도 확실하게 흰색 */
+body.theme-light .category-card-actions .btn.danger,
+body.theme-light .location-detail-actions .btn.danger { color: #fff !important; }
+
+/* ---- 2. 라이트 모드 공간 맵 색상 — 부드럽지만 식별성 강화 ---- */
+body.theme-light .space-map {
+  background:
+    linear-gradient(rgba(15, 23, 42, .04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, .04) 1px, transparent 1px),
+    #f8fafc;
+  border-color: rgba(15, 23, 42, .08);
+}
+body.theme-light .map-zone {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, .10);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+}
+body.theme-light .map-zone::after { background: rgba(15, 23, 42, .03); }
+
+body.theme-light .map-zone.zone-greenhouse {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(22, 163, 74, .10), transparent 55%),
+    linear-gradient(160deg, #f0fdf4 0%, #ffffff 70%);
+  border: 1px solid rgba(22, 163, 74, .26);
+  border-left: 4px solid #16a34a;
+}
+body.theme-light .map-zone.zone-lab {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .10), transparent 55%),
+    linear-gradient(160deg, #eff6ff 0%, #ffffff 70%);
+  border: 1px solid rgba(37, 99, 235, .26);
+  border-left: 4px solid #2563eb;
+}
+body.theme-light .map-zone.zone-common {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(124, 58, 237, .10), transparent 55%),
+    linear-gradient(160deg, #faf5ff 0%, #ffffff 70%);
+  border: 1px solid rgba(124, 58, 237, .26);
+  border-left: 4px solid #7c3aed;
+}
+
+body.theme-light .map-zone:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, .12);
+}
+body.theme-light .map-zone.active {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 1px;
+  border-left-width: 4px;
+  box-shadow: 0 14px 32px rgba(14, 165, 233, .18);
+}
+
+body.theme-light .map-zone-main strong,
+body.theme-light .map-count { color: #0f172a; text-shadow: none; }
+body.theme-light .map-zone.zone-greenhouse .map-zone-icon {
+  background: #dcfce7; color: #166534;
+}
+body.theme-light .map-zone.zone-lab .map-zone-icon {
+  background: #dbeafe; color: #1d4ed8;
+}
+body.theme-light .map-zone.zone-common .map-zone-icon {
+  background: #ede9fe; color: #6d28d9;
+}
+body.theme-light .map-zone-main span,
+body.theme-light .map-zone-desc { color: #475569; }
+body.theme-light .map-zone .map-label { color: #64748b; }
+
+/* 사진 있는 맵 카드도 라이트 모드에서 글자가 살아 있도록 */
+body.theme-light .map-zone.has-photo::before {
+  background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(255,255,255,.70));
+}
+body.theme-light .map-zone.has-photo .map-zone-icon { backdrop-filter: blur(4px); }
+
+/* ---- 3. 미니 맵(대시보드 상단) 라이트 모드 색상 ---- */
+body.theme-light .mini-zone {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, .10);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .04);
+}
+body.theme-light .mini-zone:hover {
+  border-color: rgba(14, 165, 233, .38);
+  background: #f8fafc;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
+}
+body.theme-light .mini-zone .zone-title { color: #0f172a; }
+body.theme-light .mini-zone .zone-meta { color: #64748b; }
+body.theme-light .zone-greenhouse .zone-icon { background: #dcfce7; color: #166534; }
+body.theme-light .zone-lab .zone-icon { background: #dbeafe; color: #1d4ed8; }
+body.theme-light .zone-common .zone-icon { background: #ede9fe; color: #6d28d9; }
+
+/* ---- 4. 라이트 모드 아이콘 / 칩 / 배지 가독성 ---- */
+body.theme-light .stat-icon {
+  background: #e0f2fe; color: #075985;
+}
+body.theme-light .admin-status-icon {
+  background: #e0f2fe; color: #075985;
+}
+body.theme-light .chip {
+  color: #334155;
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, .10);
+}
+body.theme-light .chip:hover {
+  border-color: rgba(14, 165, 233, .40);
+  background: #f1f5f9;
+}
+body.theme-light .chip.active {
+  color: #0c4a6e;
+  background: #bae6fd;
+  border-color: #38bdf8;
+}
+body.theme-light .chip .count { color: inherit; opacity: .72; }
+
+body.theme-light .tag-pill {
+  color: #1e293b;
+  background: #e2e8f0;
+  border-color: rgba(15, 23, 42, .10);
+}
+
+/* ---- 5. 라이트 모드 카드 / 패널 미세 보정 ---- */
+body.theme-light .item-card {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, .10);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+}
+body.theme-light .item-card:hover {
+  border-color: rgba(14, 165, 233, .42);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, .12);
+}
+body.theme-light .stat-card,
+body.theme-light .category-card,
+body.theme-light .location-manage-detail,
+body.theme-light .admin-space-tab {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, .10);
+}
+body.theme-light .stat-card::after { background: rgba(14, 165, 233, .08); }
+
+body.theme-light .compact-item {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, .10);
+}
+body.theme-light .compact-item:hover { border-color: rgba(14, 165, 233, .40); background: #f8fafc; }
+body.theme-light .compact-qty {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ---- 6. 라이트 모드 사이드바 / 네비 ---- */
+body.theme-light .nav-item { color: #334155; }
+body.theme-light .nav-item:hover { color: #0f172a; background: #e0f2fe; }
+body.theme-light .nav-item.active {
+  color: #0c4a6e;
+  background: linear-gradient(135deg, #e0f2fe, #ecfdf5);
+  border-color: rgba(14, 165, 233, .32);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+}
+body.theme-light .sidebar-toggle {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, .14);
+  color: #0f172a;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .10);
+}
+
+/* ---- 7. 라이트 모드 모달 / 입력 ---- */
+body.theme-light input,
+body.theme-light textarea,
+body.theme-light select {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, .14);
+}
+body.theme-light input::placeholder,
+body.theme-light textarea::placeholder { color: #94a3b8; }
+body.theme-light input:focus,
+body.theme-light textarea:focus,
+body.theme-light select:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, .18);
+  background: #ffffff;
+}
+body.theme-light .image-frame,
+body.theme-light .space-image-frame,
+body.theme-light .map-detail-photo.placeholder,
+body.theme-light .location-detail-photo.placeholder {
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, .10);
+  color: #64748b;
+}
+body.theme-light .qty-btn { background: #f1f5f9; color: #0f172a; }
+body.theme-light .qty-btn:hover { background: #e2e8f0; }
+
+/* ---- 8. 라이트 모드 active admin tab / 카테고리 admin ---- */
+body.theme-light .admin-space-tab:hover {
+  border-color: rgba(14, 165, 233, .42);
+  background: #f8fafc;
+}
+body.theme-light .admin-space-tab-count {
+  background: #fef3c7; color: #92400e;
+}
+body.theme-light .category-admin-card {
+  background: linear-gradient(135deg, #ecfeff, #f0f9ff);
+  border: 1px dashed rgba(14, 165, 233, .42);
+}
+
+/* ---- 9. 카드 제목 라이트 모드 그림자/대비 ---- */
+body.theme-light .item-card .card-title {
+  color: #ffffff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .82), 0 1px 3px rgba(0, 0, 0, .6);
+}
+body.theme-light .card-grad {
+  background: linear-gradient(to top, rgba(0,0,0,.82), transparent);
+}
+body.theme-light .location-badge {
+  background: rgba(15, 23, 42, .82);
+  color: #ffffff;
+}
+body.theme-light .project-badge {
+  background: #ffffff;
+  color: #075985;
+  border: 1px solid #bae6fd;
+}
+
+/* ---- 10. Eyebrow / 라벨 톤 통일 ---- */
+body.theme-light .eyebrow { color: #0e7490; letter-spacing: .14em; }
+body.theme-light .auth-mini-copy strong { color: #0f172a; }
+
+/* ---- 11. 작은 가독성 보정: 줄바꿈/공간/포커스 ---- */
+.btn:focus-visible,
+.chip:focus-visible,
+.nav-item:focus-visible,
+.icon-btn:focus-visible,
+.map-zone:focus-visible,
+.admin-space-tab:focus-visible,
+.compact-item:focus-visible,
+.item-card:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+body.theme-light .btn:focus-visible,
+body.theme-light .chip:focus-visible,
+body.theme-light .nav-item:focus-visible,
+body.theme-light .map-zone:focus-visible { outline-color: #0284c7; }
+
+/* ---- 12. 모바일에서 사이드바 완전 숨김 시 햄버거가 안 보이는 문제 보정 ---- */
+@media (max-width: 620px) {
+  .sidebar-toggle {
+    display: grid;
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    right: auto;
+    z-index: 60;
+  }
+  body.sidebar-collapsed .sidebar-toggle svg { transform: none; }
+}
+
+/* ---- 13. 분류/공간 카드 액션 정렬, 라인 헤이트 ---- */
+.category-card-actions { row-gap: 8px; }
+.location-detail-actions { row-gap: 8px; }
+.modal-head h2 { line-height: 1.25; }
+.dialog-card p { line-height: 1.65; word-break: keep-all; }
+
+/* ---- 14. 빈 상태(empty-note) 라이트 모드 ---- */
+body.theme-light .empty-note {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, .12);
+}
+
+/* ---- 15. 라이트 모드 컴팩트 리스트 수량 배지 ---- */
+body.theme-light .location-item-qty { background: #e2e8f0; color: #334155; }
+
+/* ---- 16. 다크 모드 삭제 버튼 hover 대비 ---- */
+body:not(.theme-light) .btn.danger:hover svg { color: #fff; }
+
+/* ---- 17. Scrollbar 톤 (라이트 모드) ---- */
+body.theme-light .admin-space-tabs,
+body.theme-light .location-item-list,
+body.theme-light .map-detail-panel,
+body.theme-light .modal-card {
+  scrollbar-color: #cbd5e1 transparent;
+}
