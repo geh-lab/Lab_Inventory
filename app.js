@@ -28,7 +28,8 @@ const DEFAULT_LOCATIONS = [
 const PROJECTS = [
   { id: "field", label: "노지", icon: "field" },
   { id: "greenhouse", label: "온실", icon: "sprout" },
-  { id: "both", label: "모두", icon: "layers" }
+  { id: "both", label: "모두", icon: "layers" },
+  { id: "none", label: "없음", icon: "none" }
 ];
 
 const DEFAULT_CATEGORIES = [CATEGORY_NONE, "HPLC 분석", "흡광도 분석", "장비", "소모품", "시약", "종자", "토양/상토", "비료", "공구", "안전용품", "문서", "기타"];
@@ -169,6 +170,7 @@ const SVG = {
   more: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='5' cy='12' r='1'/><circle cx='12' cy='12' r='1'/><circle cx='19' cy='12' r='1'/></svg>",
   field: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 17c4-4 8-4 12 0 2 2 4 2 6 0'/><path d='M3 12c4-4 8-4 12 0 2 2 4 2 6 0'/><path d='M3 7c4-4 8-4 12 0 2 2 4 2 6 0'/></svg>",
   layers: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='m12 2 9 5-9 5-9-5 9-5Z'/><path d='m3 12 9 5 9-5'/><path d='m3 17 9 5 9-5'/></svg>",
+  none: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='8'/><path d='M8 12h8'/></svg>",
   image: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M4 5h16v14H4z'/><path d='m4 15 4-4 4 4 3-3 5 5'/><circle cx='9' cy='9' r='1.5'/></svg>",
   upload: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M12 16V4'/><path d='m7 9 5-5 5 5'/><path d='M4 20h16'/></svg>",
   x: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4'><path d='M18 6 6 18M6 6l12 12'/></svg>",
@@ -715,6 +717,8 @@ function normalizeCategoryName(value) {
 }
 
 function normalizeProject(project) {
+  const raw = String(project ?? "").trim();
+  const lower = raw.toLowerCase();
   const map = {
     noji: "field",
     field: "field",
@@ -725,9 +729,19 @@ function normalizeProject(project) {
     all: "both",
     both: "both",
     "모두": "both",
-    "전체": "both"
+    "전체": "both",
+    none: "none",
+    no: "none",
+    null: "none",
+    undefined: "none",
+    na: "none",
+    "n/a": "none",
+    "없음": "none",
+    "해당없음": "none",
+    "해당 없음": "none",
+    "미지정": "none"
   };
-  return map[String(project || "").trim().toLowerCase()] || map[String(project || "").trim()] || "both";
+  return map[lower] || map[raw] || "none";
 }
 
 function rebuildCategorySet() {
@@ -1037,7 +1051,14 @@ function ensureSelectedLocation() {
 }
 
 function getProject(projectId) {
-  return PROJECTS.find((project) => project.id === projectId) || PROJECTS[2];
+  const normalized = normalizeProject(projectId);
+  return PROJECTS.find((project) => project.id === normalized) || PROJECTS.find((project) => project.id === "none") || PROJECTS[0];
+}
+
+function countProjectItems(items, projectId) {
+  if (projectId === "field") return items.filter((item) => ["field", "both"].includes(item.project)).length;
+  if (projectId === "greenhouse") return items.filter((item) => ["greenhouse", "both"].includes(item.project)).length;
+  return items.filter((item) => item.project === projectId).length;
 }
 
 function itemMatchesFilters(item) {
@@ -1047,6 +1068,7 @@ function itemMatchesFilters(item) {
     if (state.projectFilter === "field" && !["field", "both"].includes(item.project)) return false;
     else if (state.projectFilter === "greenhouse" && !["greenhouse", "both"].includes(item.project)) return false;
     else if (state.projectFilter === "both" && item.project !== "both") return false;
+    else if (state.projectFilter === "none" && item.project !== "none") return false;
   }
   if (!state.search) return true;
   return item.searchText.includes(state.search);
@@ -1073,9 +1095,7 @@ function renderFilters() {
 
   els.projectFilterBar.innerHTML = [
     filterChip("전체", "all", state.projectFilter, "layers", items.length, "project-filter"),
-    filterChip("노지", "field", state.projectFilter, "field", items.filter((item) => ["field", "both"].includes(item.project)).length, "project-filter"),
-    filterChip("온실", "greenhouse", state.projectFilter, "sprout", items.filter((item) => ["greenhouse", "both"].includes(item.project)).length, "project-filter"),
-    filterChip("모두", "both", state.projectFilter, "layers", items.filter((item) => item.project === "both").length, "project-filter")
+    ...PROJECTS.map((project) => filterChip(project.label, project.id, state.projectFilter, project.icon, countProjectItems(items, project.id), "project-filter"))
   ].join("");
 
   els.categoryFilterBar.innerHTML = [
@@ -1702,7 +1722,7 @@ function openItemModal(item = null) {
   els.deleteItemBtn.hidden = !item;
 
   populateLocationSelect();
-  renderProjectOptions(item?.project || "both");
+  renderProjectOptions(normalizeProject(item?.project));
   renderCategoryChecklist(new Set(item ? item.categories : [CATEGORY_NONE]));
 
   els.itemNameInput.value = item?.name || "";
@@ -1735,6 +1755,7 @@ function populateLocationSelect() {
 }
 
 function renderProjectOptions(selectedProject) {
+  selectedProject = normalizeProject(selectedProject);
   els.projectSegmented.innerHTML = PROJECTS.map((project) => `<label class="selectable-label ${project.id === selectedProject ? "is-selected" : ""}" tabindex="0" role="button" aria-pressed="${project.id === selectedProject ? "true" : "false"}">
     <input type="radio" name="projectRelation" value="${escapeAttr(project.id)}" ${project.id === selectedProject ? "checked" : ""}>
     <span>${icon(project.icon)}${escapeHtml(project.label)}</span>
@@ -2075,7 +2096,7 @@ async function saveItem() {
     loc: els.itemDetailLocationInput.value.trim(),
     usage: els.itemUsageInput.value.trim(),
     locationId: targetLocation,
-    project: projectInput?.value || "both",
+    project: normalizeProject(projectInput?.value),
     categories,
     cat: categories[0],
     img: tempImageData || normalizedUrlValue(els.itemImageUrlInput.value) || null,

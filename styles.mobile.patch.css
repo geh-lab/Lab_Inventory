@@ -349,3 +349,9 @@ img { max-width: 100%; height: auto; }
 @media (min-width: 861px) {
   .mobile-sidebar-toggle { display: none !important; }
 }
+
+/* ---- 9. 과제 연관성 4옵션 대응 ---- */
+@media (max-width: 620px) {
+  .segmented { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .segmented span { gap: 6px; white-space: nowrap; }
+}
