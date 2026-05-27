@@ -1977,3 +1977,77 @@ body.theme-light .hierarchy-empty { color: #64748b; }
   .hierarchy-helper-grid { grid-template-columns: 1fr; }
   .hierarchy-chip-list { max-height: 120px; }
 }
+
+/* 2026-05-29: Item modal selectable chips fix
+   관리자 모드에서도 과제 연관성/분류 칩의 선택 상태가 라이트 모드 규칙에 묻히지 않도록
+   후순위 강제 스타일과 JS 동기화용 클래스를 함께 사용합니다. */
+.selectable-label {
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.selectable-label.is-disabled {
+  cursor: not-allowed !important;
+  opacity: .58;
+}
+.selectable-label:focus-visible span,
+.segmented label:focus-visible span,
+.category-check:focus-visible span {
+  outline: 3px solid rgba(56, 189, 248, .35);
+  outline-offset: 3px;
+}
+.segmented label.is-selected span,
+.segmented input:checked + span {
+  background: linear-gradient(135deg, #e0f2fe, #bae6fd) !important;
+  color: #075985 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 10px 24px rgba(14, 165, 233, .18) !important;
+}
+.category-check.is-selected span,
+.category-check input:checked + span {
+  background: linear-gradient(135deg, rgba(16, 185, 129, .28), rgba(45, 212, 191, .16)) !important;
+  color: #d1fae5 !important;
+  border-color: rgba(52, 211, 153, .58) !important;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, .14) !important;
+}
+body.theme-light .segmented label.is-selected span,
+body.theme-light .segmented input:checked + span {
+  background: linear-gradient(135deg, #bae6fd, #e0f2fe) !important;
+  color: #075985 !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 10px 22px rgba(14, 165, 233, .18) !important;
+}
+body.theme-light .category-check.is-selected span,
+body.theme-light .category-check input:checked + span {
+  background: linear-gradient(135deg, #dcfce7, #ccfbf1) !important;
+  color: #065f46 !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, .16) !important;
+}
+body.theme-light .selectable-label.is-disabled span {
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  border-color: rgba(15, 23, 42, .08) !important;
+  box-shadow: none !important;
+}
+
+/* 2026-05-29b: Item modal selectable chips click hardening
+   라디오/체크박스가 hidden input 구조라 모바일/브라우저별 label 기본 동작이 흔들릴 수 있어
+   JS 수동 토글과 같이 동작하도록 포인터/터치 영역을 명확히 고정합니다. */
+.segmented label,
+.category-check,
+.selectable-label {
+  pointer-events: auto !important;
+  touch-action: manipulation;
+}
+.segmented label > span,
+.category-check > span {
+  pointer-events: auto !important;
+}
+body.editor-mode .selectable-label {
+  cursor: pointer !important;
+  opacity: 1 !important;
+}
+body.editor-mode .selectable-label.is-disabled {
+  cursor: pointer !important;
+  opacity: 1 !important;
+}

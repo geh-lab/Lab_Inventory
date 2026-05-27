@@ -222,6 +222,11 @@ function bindEvents() {
   els.locationImageUrlInput.addEventListener("change", handleLocationImageUrlChange);
   els.locationImageUrlInput.addEventListener("blur", handleLocationImageUrlChange);
   els.addCategoryBtn.addEventListener("click", addCategoryFromInput);
+  els.projectSegmented.addEventListener("click", handleProjectSegmentClick);
+  els.projectSegmented.addEventListener("keydown", handleSelectableLabelKeydown);
+  els.projectSegmented.addEventListener("change", syncItemModalSelectors);
+  els.categoryChecklist.addEventListener("click", handleCategoryCheckClick);
+  els.categoryChecklist.addEventListener("keydown", handleSelectableLabelKeydown);
   els.categoryChecklist.addEventListener("change", handleCategoryToggle);
   els.saveLocationBtn.addEventListener("click", saveLocation);
   [els.locationGroupInput, els.locationMiddleInput, els.locationSmallInput].forEach((input) => {
@@ -550,6 +555,9 @@ function updateAuthUI() {
   const editable = canEdit();
   document.body.classList.toggle("editor-mode", editable);
   document.body.classList.toggle("admin-mode", editable);
+  if (els.itemModal?.classList.contains("open") || els.locationModal?.classList.contains("open")) {
+    updateFormAccess();
+  }
   if (currentUser) {
     els.authBtnText.textContent = "로그아웃";
     els.authMiniTitle.textContent = currentUser.displayName || currentUser.email || "Google 사용자";
@@ -1727,20 +1735,22 @@ function populateLocationSelect() {
 }
 
 function renderProjectOptions(selectedProject) {
-  els.projectSegmented.innerHTML = PROJECTS.map((project) => `<label>
+  els.projectSegmented.innerHTML = PROJECTS.map((project) => `<label class="selectable-label ${project.id === selectedProject ? "is-selected" : ""}" tabindex="0" role="button" aria-pressed="${project.id === selectedProject ? "true" : "false"}">
     <input type="radio" name="projectRelation" value="${escapeAttr(project.id)}" ${project.id === selectedProject ? "checked" : ""}>
     <span>${icon(project.icon)}${escapeHtml(project.label)}</span>
   </label>`).join("");
+  syncItemModalSelectors();
 }
 
 function renderCategoryChecklist(selectedSet = new Set()) {
   selectedSet.forEach((category) => customCategories.add(category));
   const selectedHidden = [...selectedSet].find((category) => isCategoryHidden(category)) || "";
   const categories = getActiveCategoryLabels({ includeZero: true, includeHiddenSelected: selectedHidden });
-  els.categoryChecklist.innerHTML = categories.map((category) => `<label class="category-check ${isCategoryHidden(category) ? "is-hidden" : ""}">
+  els.categoryChecklist.innerHTML = categories.map((category) => `<label class="category-check selectable-label ${selectedSet.has(category) ? "is-selected" : ""} ${isCategoryHidden(category) ? "is-hidden" : ""}" tabindex="0" role="button" aria-pressed="${selectedSet.has(category) ? "true" : "false"}">
     <input type="checkbox" value="${escapeAttr(category)}" ${selectedSet.has(category) ? "checked" : ""}>
     <span>${escapeHtml(category)}${isCategoryHidden(category) ? " · 숨김" : ""}</span>
   </label>`).join("");
+  syncItemModalSelectors();
 }
 
 function getSelectedCategoriesFromModal() {
@@ -1752,9 +1762,53 @@ function getSelectedCategoriesFromModal() {
   return values.length ? values : [CATEGORY_NONE];
 }
 
+function handleProjectSegmentClick(event) {
+  const label = event.target.closest(".segmented label");
+  if (!label || !els.projectSegmented.contains(label)) return;
+  const input = label.querySelector("input[type='radio']");
+  if (!input) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!canEdit()) return;
+  // 관리자 전환 직후 기존 disabled 상태가 남아 있어도 선택 가능하도록 즉시 복구합니다.
+  input.disabled = false;
+  input.checked = true;
+  syncItemModalSelectors();
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function handleCategoryCheckClick(event) {
+  const label = event.target.closest(".category-check");
+  if (!label || !els.categoryChecklist.contains(label)) return;
+  const input = label.querySelector("input[type='checkbox']");
+  if (!input) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!canEdit()) return;
+  // 관리자 전환 직후 기존 disabled 상태가 남아 있어도 선택 가능하도록 즉시 복구합니다.
+  input.disabled = false;
+  input.checked = !input.checked;
+  applyCategorySelectionRule(input);
+  syncItemModalSelectors();
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function handleSelectableLabelKeydown(event) {
+  if (!["Enter", " ", "Spacebar"].includes(event.key)) return;
+  const label = event.target.closest(".selectable-label");
+  if (!label) return;
+  event.preventDefault();
+  label.click();
+}
+
 function handleCategoryToggle(event) {
   const input = event.target.closest("input[type='checkbox']");
   if (!input) return;
+  applyCategorySelectionRule(input);
+  syncItemModalSelectors();
+}
+
+function applyCategorySelectionRule(input) {
   if (input.value === CATEGORY_NONE && input.checked) {
     els.categoryChecklist.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
       if (checkbox.value !== CATEGORY_NONE) checkbox.checked = false;
@@ -1762,6 +1816,32 @@ function handleCategoryToggle(event) {
   } else if (input.checked) {
     const noneInput = [...els.categoryChecklist.querySelectorAll("input[type='checkbox']")].find((checkbox) => checkbox.value === CATEGORY_NONE);
     if (noneInput) noneInput.checked = false;
+  }
+}
+
+function syncItemModalSelectors() {
+  const editable = canEdit();
+  if (els.projectSegmented) {
+    els.projectSegmented.querySelectorAll("label").forEach((label) => {
+      const input = label.querySelector("input[type='radio']");
+      if (input && editable) input.disabled = false;
+      const selected = Boolean(input?.checked);
+      label.classList.toggle("is-selected", selected);
+      label.classList.toggle("is-disabled", !editable);
+      label.tabIndex = editable ? 0 : -1;
+      label.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  }
+  if (els.categoryChecklist) {
+    els.categoryChecklist.querySelectorAll(".category-check").forEach((label) => {
+      const input = label.querySelector("input[type='checkbox']");
+      if (input && editable) input.disabled = false;
+      const selected = Boolean(input?.checked);
+      label.classList.toggle("is-selected", selected);
+      label.classList.toggle("is-disabled", !editable);
+      label.tabIndex = editable ? 0 : -1;
+      label.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
   }
 }
 
@@ -1787,6 +1867,11 @@ function updateFormAccess() {
     const isReadOnlyButton = control.classList.contains("compact-item");
     if (!isClose && !isReadOnlyButton) control.disabled = !editable;
   });
+  els.itemModal.querySelectorAll(".selectable-label").forEach((label) => {
+    label.classList.toggle("is-disabled", !editable);
+    label.tabIndex = editable ? 0 : -1;
+  });
+  syncItemModalSelectors();
   els.locationModal.querySelectorAll("input, textarea, select, button").forEach((control) => {
     const isClose = control.matches("[data-close-modal]");
     if (!isClose) control.disabled = !editable;
